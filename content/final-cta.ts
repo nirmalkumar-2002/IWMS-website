@@ -1,0 +1,37 @@
+import type { SectionContent } from './types';
+export const finalCTAContent = {
+  id: 'contact',
+  eyebrow: 'LET’S PLAN YOUR ROLLOUT',
+  title: 'A cleaner city starts with a clear plan.',
+  description:
+    'We can turn this vision into reality through innovative thinking and collective action.',
+  source: {
+    pages: [25],
+  },
+  items: [],
+  labels: {
+    name: 'Name',
+    designation: 'Designation',
+    organisation: 'Organisation / ULB',
+    state: 'State',
+    city: 'City',
+    email: 'Email',
+    phone: 'Phone',
+    interest: 'Interest',
+    message: 'Message',
+    demo: 'Demo',
+    pilot: 'Pilot',
+    tender: 'Tender documentation',
+    partnership: 'Partnership',
+    submit: 'Request a Demo',
+    submitting: 'Sending your request…',
+    success: '✓ Request verified',
+    whatsapp: 'Chat on WhatsApp',
+    required: 'This field is required.',
+    emailError: 'Enter a valid email address.',
+    error: 'Your request could not be sent. Please try again.',
+    honeypot: 'Leave this field empty',
+    consent: 'I have read the privacy policy.',
+    assessment: 'City assessment inputs',
+  },
+} satisfies SectionContent;

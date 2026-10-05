@@ -1,0 +1,404 @@
+PAGE 1
+INTEGRATED WASTE
+MANAGEMENT SUITE
+ZIGMA GLOBAL ENVIRON SOLUTIONS PVT LTD
+A unified digital platform for waste management.
+
+PAGE 2
+Overview of IWMS
+The Integrated Waste Management Suite (IWMS) is a digital platform built to modernize, streamline, and optimize municipal solid waste 
+management. It brings together IoT-enabled sensors, GPS-tracked vehicles, QR-based household verification, CCTV monitoring, and 
+mobile/web platforms to ensure seamless operations.
+ZIGMA - IWMS
+The system ensures:
+
+Transparency & Accountability – End-to-end traceability of waste movement.
+
+Fraud Prevention – Eliminates manual loopholes with automated verification.
+
+Automated Collection Verification – QR codes validate household and bin-level pickups.
+
+Accurate Weighment Tracking – IoT load cells and weighbridge integration.
+
+Real-time Citizen Engagement – Notifications, feedback collection, and grievance handling via app/portal.
+
+Regulatory Compliance – Aligned with Solid Waste Management (SWM) Rules for sustainable urban operations.
+
+Sustainability – Promotes segregation, recycling, composting, and eco-friendly disposal.
+
+Processing – Scientific segregation and treatment of wet, dry, hazardous, sanitary, and glass waste.
+
+Disposal & Rejects – Safe disposal of non-combustible, non-compostable, non-reusable, non-recyclable rejects at engineered landfills
+.
+
+Landfill Management – Tracks inflow, balance life, fire safety, informal activity monitoring, compliance.
+
+PAGE 3
+IWMS Model 
+The system integrates web and app-based monitoring tools with an IoT-enabled navigation system to ensure efficient waste collection. It 
+uses QR code-based tracking for accountability, connects with the Integrated Command and Control Centre (ICCC) for centralized oversight, 
+and includes a grievance redressal system to address citizen concerns effectively. All operations will strictly follow the Solid Waste 
+Management (SWM) Rules to ensure compliance with regulatory protocols.
+ZIGMA - IWMS
+The system ensures:
+Grievance Redressal system
+Web & App Based Monitoring tools 
+IoT Based Navigation System 
+Sensor based waste collection 
+ICCC (Integrated command and control centre)
+
+PAGE 4
+Functional Modules of IWMS
+ZIGMA - IWMS
+2. D2D Collection & Logistics  
+Management
+•
+Monitors vehicles in real-time with GPS, 
+route optimization, fuel tracking, and 
+automated fraud prevention.
+5. Waste Management
+•
+Logs and manages waste segregation and 
+processing across multiple treatment facilities.
+6. Landfill Management
+•
+Ensures safe, transparent, and compliant operations through 
+waste tracking, analytics, fire safety, activity monitoring, and 
+regulatory reporting.
+3. Resource Management
+•
+Digitally manages staff attendance, route 
+assignments, and performance reports.
+4. Weighbridge Management
+• Tracks waste quantities via IoT sensors, 
+weighbridges, and reconciliation with alerts.
+1. Collection & Verification
+•
+Ensures waste pickup validation using QR 
+codes, event logging, and citizen notifications.
+7. Grievance Redressal Management
+•
+Captures citizen complaints and feedback with 
+escalation workflows and analytics insights.
+
+PAGE 5
+ZIGMA - IWMS
+Collection & Verification
+
+PAGE 6
+Collection & Verification
+ZIGMA - IWMS
+QR Tagging for Verification
+• QR codes for households, bins, gated communities, 
+apartments, industries, and institutions.
+Pickup Event Logging
+•
+Records GPS location, timestamp, waste image, and 
+weighment
+•
+Creates tamper-proof digital logs
+•
+Live Tracking and Travel time per zone
+Exception Handling
+•
+Flags cases like locked houses, no waste, or damaged bins
+•
+Enables reporting and corrective actions
+Resident Notifications
+• SMS/App alerts 15 minutes before collection vehicle 
+arrival
+• Improves citizen participation and readiness
+Body Cameras for Operators
+•
+Enhances transparency, safety, and fraud prevention
+•
+Provides dispute resolution evidence
+Asset Management:
+•
+Capex – Vehicles, Bins, Equipment
+•
+Opex – Fuel, Maintenance, Staff
+•
+Attendance – Daily workforce tracking
+
+PAGE 7
+ZIGMA - IWMS
+D2D Collection &
+Logistics Management
+
+PAGE 8
+D2D Collection & Logistics Management
+ZIGMA - IWMS
+GPS-Enabled Live Tracking
+•
+Real-time visibility of all vehicles on a map
+•
+Geo-fencing to prevent unauthorized movement
+Route Planning & Monitoring
+•
+Optimized route allocation
+•
+Adherence tracking with alerts for deviations
+Diesel Consumption Monitoring
+•
+Tracks fuel usage & efficiency
+•
+Prevents misuse & ensures cost control
+Vehicle Capacity & Utilization Reports
+•
+Monitors load vs. actual capacity
+•
+Helps in efficient fleet utilization
+Ring Fencing & Fraud Prevention
+•
+Auto-detection of vehicle movement
+•
+Vehicle photo & CCTV verification for accountability
+
+PAGE 9
+ZIGMA - IWMS
+Resource Management
+
+PAGE 10
+Resource Management
+ZIGMA - IWMS
+Digital Attendance
+•
+Photo, QR, or biometric-based attendance logging
+•
+Prevents proxy or manual errors
+Crew Assignment
+•
+Allocate staff to specific routes and tasks
+•
+Optimizes workforce utilization
+Performance Tracking
+•
+Measure route coverage, number of stops, and citizen service 
+ratings
+•
+Identify top performers and gaps
+Reports & Exceptions
+•
+Generate daily and monthly attendance reports
+•
+Highlight exceptions (absentees, missed pickups, late logins)
+
+PAGE 11
+ZIGMA - IWMS
+Weighbridge Management
+
+PAGE 12
+Weighbridge Management
+ZIGMA - IWMS
+IoT-Enabled Load Cells
+• Real-time monitoring of vehicle waste weights
+• Accurate data collection and logging
+Weighbridge Integration
+•
+Transfer stations connected with digital weighbridges
+•
+Seamless flow of weighment data
+Cross-Verification
+•
+Compares per-stop collected waste with vehicle’s gross 
+weighment
+•
+Ensures consistency and prevents manipulation
+Discrepancy Alerts & Audit Logs
+• Instant notifications for mismatched weights
+• Complete digital audit trail for accountability
+Calibration Monitoring
+•
+Alerts for calibration schedules
+•
+Certificate renewal reminders for weighbridge compliance
+
+PAGE 13
+ZIGMA - IWMS
+Waste Management
+
+PAGE 14
+Waste Management
+ZIGMA - IWMS
+Segregation Logging
+• Tracks wet, dry, hazardous, sanitary, and glass waste 
+categories
+Processing Routes
+•
+Organic →Composting / Biomethanization
+•
+Dry →MRF (Material Recovery Facility) / Pyrolysis
+•
+Mixed →Segregation & Composting
+Disposal & Reconciliation
+•
+Records disposal flow
+•
+Aggregates data for reconciliation and compliance reports
+Rejects (Definition & Handling under SWM Rules)
+•
+Non-combustible, non-compostable, non-reusable, non-recyclable 
+items
+Examples: Broken commodes, construction debris, inerts, ceramic 
+waste
+Handling Protocol:
+•
+Diverted to scientifically managed landfills or designated low-lying 
+areas
+•
+Ensures no contamination of recyclable and compostable streams
+
+PAGE 15
+ZIGMA - IWMS
+Landfill Management
+
+PAGE 16
+Landfill Management
+ZIGMA - IWMS
+•
+Uses CCTV + AI-based analytics integrated with drone surveys 
+for aerial monitoring.
+•
+Helps identify unauthorized dumping and unsafe human 
+activities.
+Compliance & Reporting
+•
+Ensures adherence to SWM Rules, environmental norms, and 
+safety standards
+•
+Generates structured reports for authorities
+Landfill Capacity
+•
+Tracks how much waste a landfill can safely hold before closure.
+•
+Calculated from engineered volume, compaction, and cover 
+requirements, updated with weighbridge, drone/GIS, and 3D 
+modeling.
+•
+Dashboards show current utilization, balance life, and forecast 
+scenarios, enabling smart planning for new cells, expansion, or 
+diversion.
+Waste Inflow Tracking
+•
+Monitors all waste reaching the landfill, including processing 
+rejects and mixed/unsegregated waste
+• Integrated with weighbridge data
+Analytics Dashboards
+•
+Visualizes inflow trends, site balance life, forecast capacity, and 
+diversion ratios
+•
+Data-driven planning for landfill operations
+Fire & Safety Management
+•
+Equipped with surveillance cameras, thermal sensors, and suppression 
+systems.
+•
+Monitors hotspots and initiates alerts to prevent accidents and landfill 
+fires.
+Informal Activity Monitoring
+•
+Detects rag pickers, animals, birds, or unsafe activities at landfill sites.
+
+PAGE 17
+ZIGMA - IWMS
+Grievance Redressal 
+Management
+
+PAGE 18
+Grievance Redressal Management
+ZIGMA - IWMS
+Citizen Portal & Mobile App
+• Easy access for citizens to raise complaints anytime
+• Transparent communication channel
+Feedback Collection
+•
+Ratings (1–5 stars) after each waste pickup
+•
+Helps monitor service quality
+Escalation Matrix
+•
+Automatic routing of unresolved complaints to higher 
+authorities
+•
+Ensures accountability and quick resolution
+Analytics-Driven Insights
+• Tracks complaint trends, response times, and feedback 
+patterns
+• Data-driven service improvements
+
+PAGE 19
+Benefits of IWMS
+ZIGMA - IWMS
+• Focus on Reduce, Reuse, Recycle
+• Accountability: Live data (time, staff, fuel, costs)
+• Efficiency: End-to-end waste collection with 
+checks & balances
+• Transparency: Prevents waste leakage & 
+ensures compliance
+
+PAGE 20
+Key Technologies
+ZIGMA - IWMS
+• GPS Tracking: Route optimization, diesel usage, 
+unauthorized movement
+• QR Codes: Pickup verification at household/bin level
+• Smart Bin Sensors: Fill-level, weight monitoring, 
+automated alerts
+• Thermal Cameras: Fire safety & landfill hotspot detection
+• CCTV + AI: Drone/GIS monitoring, informal activity 
+tracking
+
+PAGE 21
+ZIGMA - IWMS
+• Help Desk: Handles complaints, missed pickups
+• Grievance Redressal: Escalation workflows & analytics
+• Citizen Ratings: AI-based ratings on segregation & 
+compliance
+• Fines & Enforcement: Penalties for violators, repeat 
+offenders
+• Visitor Management System: Track external entries
+Citizen Interface & Governance
+
+PAGE 22
+Compliance & Rules
+ZIGMA - IWMS
+• Aligned with SWM Rules 2016
+• User charges & fines for mixed waste
+• Monitoring waste segregation at source
+• Automated reporting for transparency & accountability
+
+PAGE 23
+Financial Sustainability
+ZIGMA - IWMS
+• User Charges: ₹5–₹1000 per month (household to bulk 
+users)
+• Revenue from Fines: For non-compliance & violations
+• Government Subsidies: Upfront spend →later 
+reimbursement
+
+PAGE 24
+Phased Implementation (12-Month Roadmap)
+ZIGMA - IWMS
+Phase 1 (0–1 month): Weighbridge Monitoring System(accurate inflow measurement, integrated with landfill and 
+processing data)
+Phase 2 (Month 1–2): Processing System Setup(facility mapping, segregation of organic, dry, and mixed waste)
+Phase 3 (Month 2–3): Landfill Management Module(inflow tracking, analytics dashboards, landfill capacity, fire & safety, 
+compliance)
+Phase 4 (Month 3–6):
+GPS Tracking & Route Optimization
+QR Code Rollout for households, apartments, bulk waste generators, and bins
+Phase 5 (Month 6–9): User Charge (integrated billing, online/offline payment options)
+Phase 6 (Month 9–12): Grievance Redressal Mechanism(citizen app/portal, ticketing, escalation matrix) .
+Outcome: Full IWMS operational in 12 months, with scalability for faster rollout if manpower is available.
+
+PAGE 25
+ZIGMA - IWMS
+THANK YOU
+We can make this vision turns to reality through 
+innovative thinking and collective action.
+www.zigma.in
+Chennai 
+Singapore
+FOR MORE INFORMATION

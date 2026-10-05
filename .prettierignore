@@ -1,0 +1,12 @@
+node_modules
+.next
+package-lock.json
+next-env.d.ts
+public
+docs/PROMPT.md
+docs/source
+test-results
+playwright-report
+
+.prerender/
+dist/
