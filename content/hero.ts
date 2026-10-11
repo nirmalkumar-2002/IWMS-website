@@ -5,4 +5,9 @@ export const heroContent = {
   sceneLabel:
     'Cinematic scene: a green municipal waste collection truck switches on its headlights on a quiet road before dawn, then pulls away.',
   loading: 'Loading scene',
+  /** Scene 02 copy. PROPOSED marketing lines — not yet approved; edit freely here. */
+  city: {
+    title: 'Smart Collection. Connected Cities.',
+    subtitle: 'GPS-enabled fleet tracking and optimized collection routes.',
+  },
 } as const;

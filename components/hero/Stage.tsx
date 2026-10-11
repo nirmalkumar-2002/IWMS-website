@@ -1,10 +1,19 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Canvas, useFrame, useThree, type RootState } from '@react-three/fiber';
+import {
+  HalfFloatType,
+  UnsignedByteType,
+  WebGLRenderTarget,
+  type Group,
+  type Object3D,
+} from 'three';
 import { useProgress } from '@react-three/drei';
 import { ACESFilmicToneMapping } from 'three';
 import 'lenis/dist/lenis.css';
+import { CityLightPool } from './scene/CityLightPool';
 import { Director } from './scene/Director';
-import { createSceneRefs } from './scene/handles';
+import { driveAt, type DriveState } from './scene/route';
+import { createSceneRefs, type SceneRefs } from './scene/handles';
 import { STILL_SHOT, createRig, focalToFov, SHOTS } from './scene/rig';
 import { applyStill, startExperience } from './scene/timeline';
 import { Truck } from './scene/Truck';
@@ -15,6 +24,119 @@ import type { Quality } from './quality';
 const Effects = lazy(() =>
   import('./scene/Effects').then((m) => ({ default: m.Effects })),
 );
+
+// Scene 02's city is its own chunk, fetched once Scene 01 is on screen.
+const City = lazy(() => import('./scene/city/City'));
+
+/**
+ * Mounts the city, then compiles its programs off the critical path (KHR_parallel_shader_compile
+ * where available) before it is ever drawn, so entering the city never hitches mid-scroll.
+ */
+function CityMount({ quality, refs }: Pick<StageProps, 'quality'> & { refs: SceneRefs }) {
+  const group = useRef<Group>(null);
+  // Hidden until compiled; set imperatively so a re-render can never hide it again.
+  useLayoutEffect(() => {
+    if (group.current) group.current.visible = false;
+  }, []);
+  return (
+    <group ref={group}>
+      <Suspense fallback={null}>
+        <City quality={quality} refs={refs} />
+        <AfterMount
+          run={async (gl, camera, scene) => {
+            const root = group.current;
+            if (!root) return;
+            root.visible = true;
+            const compiled = gl.compileAsync(root, camera, scene);
+            root.visible = false;
+            await compiled;
+            // Warm-up: draw every city mesh once, unculled, into a tiny target. Geometry and
+            // texture uploads (and ANGLE's draw-time shader variants on Windows) happen now,
+            // while the canvas is still fading in, instead of as a stall on first sight.
+            // ANGLE builds per-output-format shader variants, so match the format the frame
+            // is really drawn into: half-float under post-processing (high), 8-bit otherwise.
+            const target = new WebGLRenderTarget(64, 64, {
+              type: quality === 'high' ? HalfFloatType : UnsignedByteType,
+            });
+            const unculled: Object3D[] = [];
+            root.traverse((o) => {
+              if (o.frustumCulled) {
+                o.frustumCulled = false;
+                unculled.push(o);
+              }
+            });
+            root.visible = true;
+            const previous = gl.getRenderTarget();
+            gl.setRenderTarget(target);
+            gl.render(scene, camera);
+            gl.setRenderTarget(previous);
+            unculled.forEach((o) => (o.frustumCulled = true));
+            target.dispose();
+          }}
+        />
+      </Suspense>
+    </group>
+  );
+}
+
+function AfterMount({
+  run,
+}: {
+  run: (
+    gl: RootState['gl'],
+    camera: RootState['camera'],
+    scene: RootState['scene'],
+  ) => Promise<void>;
+}) {
+  const get = useThree((s) => s.get);
+  const done = useRef(false);
+  useEffect(() => {
+    if (done.current) return;
+    done.current = true;
+    const { gl, camera, scene } = get();
+    void run(gl, camera, scene);
+  }, [get, run]);
+  return null;
+}
+
+/** `?debug` exposes read-only hooks for QA (Playwright) and manual profiling. */
+function DebugHook({ rig }: { rig: ReturnType<typeof createRig> }) {
+  const gl = useThree((s) => s.gl);
+  const camera = useThree((s) => s.camera);
+  const debug = useRef(false);
+  const frame = useRef({ calls: 0, triangles: 0 });
+  // Post-processing renders several passes per frame, so accumulate info across the frame.
+  useFrame(() => {
+    if (!debug.current) return;
+    frame.current = { calls: gl.info.render.calls, triangles: gl.info.render.triangles };
+    gl.info.reset();
+  }, -1);
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has('debug')) return;
+    debug.current = true;
+    gl.info.autoReset = false;
+    const scratch = {} as DriveState;
+    const target = window as unknown as Record<string, unknown>;
+    target.__iwmsHero = {
+      rig,
+      distance: () => driveAt(rig.driveSec, scratch).distance,
+      camera: () => camera.position.toArray(),
+      info: () => ({
+        calls: frame.current.calls,
+        triangles: frame.current.triangles,
+        geometries: gl.info.memory.geometries,
+        textures: gl.info.memory.textures,
+        programs: gl.info.programs?.length ?? 0,
+      }),
+    };
+    return () => {
+      debug.current = false;
+      gl.info.autoReset = true;
+      delete target.__iwmsHero;
+    };
+  }, [rig, gl, camera]);
+  return null;
+}
 
 export interface StageProps {
   quality: Exclude<Quality, 'poster'>;
@@ -70,6 +192,7 @@ export default function Stage({ quality, still, section, onReady, onFail }: Stag
     const copy = {
       words: [...section.querySelectorAll<HTMLElement>('.hero__word')],
       subtitle: section.querySelector<HTMLElement>('.hero__subtitle')!,
+      city: [...section.querySelectorAll<HTMLElement>('.hero__city-line')],
     };
     window.history.scrollRestoration = 'manual';
     window.scrollTo(0, 0);
@@ -88,7 +211,7 @@ export default function Stage({ quality, still, section, onReady, onFail }: Stag
           stencil: false,
           toneMapping: ACESFilmicToneMapping,
         }}
-        camera={{ fov: focalToFov(SHOTS[0].focal), near: 0.1, far: 1400 }}
+        camera={{ fov: focalToFov(SHOTS[0].focal), near: 0.25, far: 1600 }}
         onCreated={({ gl }) => {
           gl.domElement.addEventListener('webglcontextlost', (event) => {
             event.preventDefault();
@@ -100,6 +223,8 @@ export default function Stage({ quality, still, section, onReady, onFail }: Stag
           <World quality={quality} refs={refs} />
           <Truck refs={refs} />
           <Director rig={rig} refs={refs} still={still} />
+          {!still && <CityLightPool refs={refs} count={quality === 'high' ? 3 : 2} />}
+          <DebugHook rig={rig} />
           {quality === 'high' && <Effects />}
           <ReadySignal
             onReady={() => {
@@ -108,6 +233,7 @@ export default function Stage({ quality, still, section, onReady, onFail }: Stag
             }}
           />
         </Suspense>
+        {ready && !still && <CityMount quality={quality} refs={refs} />}
       </Canvas>
       <LoadingLine />
       {!__TRUCK_MODEL__ && (

@@ -320,7 +320,11 @@ export function ProxyTruck({
   useLayoutEffect(() => {
     onHandles({
       body: body.current!,
-      wheels: [...wheels.current].map((node) => ({ node, radius: WHEEL_R })),
+      wheels: [...wheels.current].map((node) => ({
+        node,
+        radius: WHEEL_R,
+        front: node.position.x > -1,
+      })),
       headlightLenses: [m.headL, m.headR],
       markerLenses: [m.marker],
       tailLenses: [m.tail],

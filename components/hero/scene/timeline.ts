@@ -2,12 +2,20 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
 import { SHOTS, shotU, type Rig } from './rig';
+import {
+  CITY_SHOTS,
+  JOURNEY_END_SEC,
+  SCENE1_END_SEC,
+  secondsAtDistance,
+} from './route';
 
 gsap.registerPlugin(ScrollTrigger);
 
 export interface CopyElements {
   words: HTMLElement[];
   subtitle: HTMLElement;
+  /** Scene 02 copy block (title + supporting line). */
+  city: HTMLElement[];
 }
 
 /** Lamp warm-up: brief DRL step, fast rise with a ~4% overshoot, settle. Deterministic, no flicker. */
@@ -66,15 +74,20 @@ export function applyStill(rig: Rig, stillShot: number) {
 }
 
 /**
- * Scroll-scrubbed reveal. Owns: camU, focal, follow, driveT and copy after the intro.
- * Each shot = 1 unit of camera travel + a dwell, then the drive-off.
+ * Scroll-scrubbed reveal. Owns: camU, focal, follow, driveSec, cityU, dawn and copy after the
+ * intro. Scene 01: each shot = 1 unit of camera travel + a dwell, then the drive-off.
+ * Scene 02 continues on the same timeline (one ScrollTrigger) from the drive-off's last frame.
  */
 export function buildReveal(rig: Rig, copy: CopyElements) {
   const tl = gsap.timeline({ paused: true, defaults: { ease: 'power2.inOut' } });
   const move = 1;
   const dwell = 0.55;
   let at = 0.35;
-  tl.set(rig, { camU: 0, focal: SHOTS[0].focal, follow: 0, driveT: 0, dawn: 0 }, 0);
+  tl.set(
+    rig,
+    { camU: 0, focal: SHOTS[0].focal, follow: 0, driveSec: 0, cityU: 0, dawn: 0 },
+    0,
+  );
   for (let i = 1; i < SHOTS.length; i++) {
     tl.addLabel(SHOTS[i].id, at).to(
       rig,
@@ -87,7 +100,7 @@ export function buildReveal(rig: Rig, copy: CopyElements) {
   tl.to(rig, { dawn: 1, duration: at, ease: 'sine.inOut' }, 0);
   // Stage 4: the truck pulls away; the camera hands over to a trailing track.
   tl.addLabel('drive', at)
-    .to(rig, { driveT: 1, duration: 3.6, ease: 'none' }, at)
+    .to(rig, { driveSec: SCENE1_END_SEC, duration: SCENE1_DRIVE, ease: 'none' }, at)
     .to(rig, { follow: 1, focal: 35, duration: 1.7, ease: 'power1.inOut' }, at);
 
   // Copy: clear the frame for close details, return over the side profile, clear for the exit.
@@ -110,9 +123,101 @@ export function buildReveal(rig: Rig, copy: CopyElements) {
       { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out', immediateRender: false },
       'side+=0.95',
     )
-    .to(all, { opacity: 0, duration: 0.6, ease: 'power1.in' }, 'drive+=1.7')
-    .to({}, { duration: 0.4 });
+    .to(all, { opacity: 0, duration: 0.6, ease: 'power1.in' }, 'drive+=1.7');
+
+  addCityEntry(tl, rig, copy, at + SCENE1_DRIVE);
+  tl.to({}, { duration: 0.4 });
   return tl;
+}
+
+/** Scroll units spent on Scene 01's pull-away and on Scene 02's whole journey. */
+const SCENE1_DRIVE = 3.6;
+const CITY_UNITS = 14;
+
+/**
+ * Scroll → simulated time for Scene 02. f(u) = u + c·u·(1−u)² is monotonic and its slope at
+ * u = 0 matches Scene 01's seconds-per-scroll, so the truck's on-screen speed doesn't kink at
+ * the hand-over even though the journey covers far more simulated time per scroll unit.
+ */
+const CITY_SPAN = JOURNEY_END_SEC - SCENE1_END_SEC;
+const C = (SCENE1_END_SEC / SCENE1_DRIVE) * (CITY_UNITS / CITY_SPAN) - 1;
+const cityEase = (u: number) => u + C * u * (1 - u) * (1 - u);
+function cityEaseInverse(y: number) {
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (cityEase(mid) < y) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+/** Scroll unit (relative to Scene 02's start) at which the truck reaches distance d. */
+const cityUnitAt = (d: number) =>
+  CITY_UNITS * cityEaseInverse((secondsAtDistance(d) - SCENE1_END_SEC) / CITY_SPAN);
+
+/**
+ * Scene 02: one linear-in-scroll drive tween (eased only by cityEase) plus camera key tweens
+ * placed where the truck reaches each shot's distance, so framing and journey stay locked.
+ */
+function addCityEntry(
+  tl: gsap.core.Timeline,
+  rig: Rig,
+  copy: CopyElements,
+  start: number,
+) {
+  tl.addLabel('city', start).fromTo(
+    rig,
+    { driveSec: SCENE1_END_SEC },
+    {
+      driveSec: JOURNEY_END_SEC,
+      duration: CITY_UNITS,
+      ease: cityEase,
+      immediateRender: false,
+    },
+    start,
+  );
+  const last = CITY_SHOTS.length - 1;
+  let prev = start;
+  for (let i = 1; i <= last; i++) {
+    const shot = CITY_SHOTS[i];
+    const at = i === last ? start + CITY_UNITS : start + cityUnitAt(shot.at);
+    tl.addLabel(`city:${shot.id}`, at).fromTo(
+      rig,
+      { cityU: (i - 1) / last, focal: CITY_SHOTS[i - 1].focal },
+      {
+        cityU: i / last,
+        focal: shot.focal,
+        duration: Math.max(0.2, at - prev),
+        ease: 'sine.inOut',
+        immediateRender: false,
+      },
+      prev,
+    );
+    prev = at;
+  }
+
+  // Copy: the city line arrives with the high establishing view and clears before the side track.
+  const shown = tl.labels['city:establish'];
+  const side = tl.labels['city:sideTrack'];
+  tl.fromTo(
+    copy.city,
+    { opacity: 0, y: 16 },
+    {
+      opacity: 1,
+      y: 0,
+      duration: 0.7,
+      stagger: 0.2,
+      ease: 'power2.out',
+      immediateRender: false,
+    },
+    shown - 0.9,
+  ).to(
+    copy.city,
+    { opacity: 0, duration: 0.5, ease: 'power1.in' },
+    shown + (side - shown) * 0.3,
+  );
 }
 
 /**

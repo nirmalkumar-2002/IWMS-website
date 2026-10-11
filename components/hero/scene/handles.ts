@@ -13,8 +13,8 @@ import type {
 export interface TruckHandles {
   /** Sprung mass. Pivots at the rear axle for acceleration squat. */
   body: Group;
-  /** Wheels spin about their local Z axis; radius measured in metres. */
-  wheels: { node: Object3D; radius: number }[];
+  /** Wheels spin about their local Z axis; front wheels also steer about Y. Radius in metres. */
+  wheels: { node: Object3D; radius: number; front: boolean }[];
   headlightLenses: [MeshStandardMaterial, MeshStandardMaterial];
   markerLenses: MeshStandardMaterial[];
   tailLenses: MeshStandardMaterial[];
@@ -34,6 +34,22 @@ export interface SceneRefs {
   sky: HemisphereLight | null;
   /** Soft front-side sky fill; rises as dawn progresses through the reveal. */
   fill: DirectionalLight | null;
+  /** Sky dome, re-centred on the camera every frame so it never clips on the long journey. */
+  skyDome: Object3D | null;
+  /** City streetlight heads registered by the city layout (world positions + aim points). */
+  cityLamps: CityLamp[];
+}
+
+export interface CityLamp {
+  x: number;
+  y: number;
+  z: number;
+  /** Ground point the lamp is aimed at. */
+  tx: number;
+  tz: number;
+  /** Light colour (hex) and peak intensity in candela for the pooled real light. */
+  color: string;
+  candela: number;
 }
 
 export const createSceneRefs = (): SceneRefs => ({
@@ -46,6 +62,8 @@ export const createSceneRefs = (): SceneRefs => ({
   bounce: null,
   sky: null,
   fill: null,
+  skyDome: null,
+  cityLamps: [],
 });
 
 /** Shared lamp geometry, in truck-local metres (front axle origin, +X forward). */

@@ -4,6 +4,8 @@ import { test, expect, type Page } from '@playwright/test';
 
 const TITLE_WORDS = ['INTEGRATED', 'WASTE', 'MANAGEMENT', 'SUITE'];
 const SUBTITLE = 'A unified digital platform for waste management.';
+const CITY_TITLE = 'Smart Collection. Connected Cities.';
+const CITY_SUBTITLE = 'GPS-enabled fleet tracking and optimized collection routes.';
 
 /** Collects console errors, page errors and every requested URL for a page. */
 function watch(page: Page) {
@@ -39,8 +41,23 @@ async function expectCopyVisible(page: Page) {
     .toEqual(Array(TITLE_WORDS.length + 1).fill(1));
 }
 
+/** Scene 02 copy: present and fully opaque (static/still/no-JS modes). */
+async function expectCityCopyVisible(page: Page) {
+  const title = page.locator('h2.hero__city-title');
+  await expect(title).toBeVisible();
+  await expect(title).toHaveText(CITY_TITLE);
+  const subtitle = page.locator('p.hero__city-subtitle');
+  await expect(subtitle).toBeVisible();
+  await expect(subtitle).toHaveText(CITY_SUBTITLE);
+  await expect
+    .poll(() => opacities(page, '.hero__city-line'))
+    .toEqual([1, 1]);
+}
+
 const isHeavyAsset = (url: string) =>
   /\/assets\/Stage-[^/]*\.js/.test(url) ||
+  /\/assets\/City-[^/]*\.js/.test(url) ||
+  /\/textures\/city\//.test(url) ||
   /\.hdr(\?|$)/.test(url) ||
   /\/(textures|models|draco|hdri)\//.test(url);
 
@@ -51,6 +68,7 @@ test.describe('without JavaScript', () => {
     await page.goto('/');
     await expect(page.locator('section.hero')).toHaveCount(1);
     await expectCopyVisible(page);
+    await expectCityCopyVisible(page);
   });
 });
 
@@ -72,6 +90,7 @@ test.describe('default tier on a software renderer @software', () => {
 
     await expect(page.locator('section.hero')).toHaveClass(/\bhero--static\b/);
     await expectCopyVisible(page);
+    await expectCityCopyVisible(page);
     await expect(page.locator('.hero__stage canvas')).toHaveCount(0);
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(1000);
@@ -98,6 +117,7 @@ test.describe('reduced motion', () => {
     });
     await expect(page.locator('.hero__stage canvas')).toHaveCount(1);
     await expectCopyVisible(page);
+    await expectCityCopyVisible(page);
 
     const { docHeight, viewport, sectionHeight } = await page.evaluate(() => ({
       docHeight: document.documentElement.scrollHeight,
@@ -130,7 +150,7 @@ test.describe('cinematic', () => {
     const sectionHeight = await hero.evaluate(
       (el) => el.getBoundingClientRect().height,
     );
-    expect(Math.abs(sectionHeight - viewport * 7)).toBeLessThanOrEqual(4);
+    expect(Math.abs(sectionHeight - viewport * 14)).toBeLessThanOrEqual(4);
 
     // Intro (~9.5 s) reveals the title by ~8 s; allow margin.
     await page.waitForTimeout(11_000);
@@ -138,7 +158,7 @@ test.describe('cinematic', () => {
       .poll(() => opacities(page, '.hero__word'), { timeout: 5_000 })
       .toEqual(Array(TITLE_WORDS.length).fill(1));
 
-    // Scroll to the bottom: the drive-off clears all copy.
+    // Scroll to the bottom (end of Scene 02): Scene 01 copy and the city copy are both clear.
     await page.evaluate(() =>
       window.scrollTo(0, document.documentElement.scrollHeight),
     );
@@ -148,6 +168,9 @@ test.describe('cinematic', () => {
         timeout: 5_000,
       })
       .toEqual(Array(TITLE_WORDS.length + 1).fill(0));
+    await expect
+      .poll(() => opacities(page, '.hero__city-line'), { timeout: 5_000 })
+      .toEqual([0, 0]);
 
     // Back to the top: title returns.
     await page.evaluate(() => window.scrollTo(0, 0));
@@ -155,6 +178,7 @@ test.describe('cinematic', () => {
     await expect
       .poll(() => opacities(page, '.hero__word'), { timeout: 5_000 })
       .toEqual(Array(TITLE_WORDS.length).fill(1));
+    expect(await opacities(page, '.hero__city-line')).toEqual([0, 0]);
 
     expect(w.pageErrors).toEqual([]);
     expect(w.consoleErrors).toEqual([]);

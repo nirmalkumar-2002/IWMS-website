@@ -4,8 +4,9 @@
   height: 100vh;
   background: var(--night-950);
 }
+/* Scene 01 (≈600vh of scroll) + Scene 02 city entry (≈700vh) on one timeline. */
 .hero--cinematic {
-  height: 700vh;
+  height: 1400vh;
 }
 .hero__stage {
   position: sticky;
@@ -73,9 +74,36 @@
   color: var(--text-muted);
 }
 
+/* Scene 02 copy: sits higher-left, over the dark rooftop field of the establishing shot. */
+.hero__copy--city {
+  top: 30vh;
+}
+.hero__city-title {
+  margin: 0;
+  font-family: var(--font-display), 'Segoe UI', system-ui, sans-serif;
+  font-weight: 600;
+  font-size: clamp(1.4rem, 2.4vw, 2.5rem);
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  color: var(--text-light);
+}
+.hero__city-subtitle {
+  margin: 0.9rem 0 0;
+  font-size: clamp(0.95rem, 1.15vw, 1.15rem);
+  color: var(--text-muted);
+}
+/* Without the scroll journey (static/still), the city copy follows the hero copy in flow. */
+.hero--static .hero__copy--city,
+.hero--still .hero__copy--city,
+.hero--pending .hero__copy--city {
+  top: auto;
+  bottom: 12vh;
+}
+
 /* With JS, copy waits for its cinematic cue; still/static modes show it immediately. */
 .js .hero:not(.hero--still):not(.hero--static) .hero__word,
-.js .hero:not(.hero--still):not(.hero--static) .hero__subtitle {
+.js .hero:not(.hero--still):not(.hero--static) .hero__subtitle,
+.js .hero:not(.hero--still):not(.hero--static) .hero__city-line {
   opacity: 0;
 }
 
@@ -91,6 +119,10 @@
   .hero__title {
     font-size: clamp(1.25rem, 6vw, 2rem);
     letter-spacing: 0.12em;
+  }
+  .hero__copy--city {
+    top: auto;
+    bottom: 11vh;
   }
   .hero__proxy-note {
     top: 1rem;

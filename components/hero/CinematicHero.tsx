@@ -83,6 +83,10 @@ export default function CinematicHero() {
           </h1>
           <p className="hero__subtitle">{heroContent.subtitle}</p>
         </div>
+        <div className="hero__copy hero__copy--city">
+          <h2 className="hero__city-title hero__city-line">{heroContent.city.title}</h2>
+          <p className="hero__city-subtitle hero__city-line">{heroContent.city.subtitle}</p>
+        </div>
       </div>
     </section>
   );

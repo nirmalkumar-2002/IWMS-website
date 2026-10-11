@@ -52,7 +52,8 @@ export function ModelTruck({
 
     const wheels = named(/^Wheel_/).map((node) => {
       const size = new Box3().setFromObject(node).getSize(new Vector3());
-      return { node, radius: size.y / 2 };
+      const front = node.getWorldPosition(new Vector3()).x > -1;
+      return { node, radius: size.y / 2, front };
     });
     const rearX = wheels
       .map(({ node }) => node.getWorldPosition(new Vector3()).x)

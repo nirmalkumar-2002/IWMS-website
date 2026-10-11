@@ -10,6 +10,7 @@ import {
   Matrix4,
   MeshStandardMaterial,
   Object3D,
+  type Mesh,
   RepeatWrapping,
   SRGBColorSpace,
   ShaderMaterial,
@@ -67,7 +68,7 @@ const skyFragment = /* glsl */ `
   }
 `;
 
-function Sky() {
+function Sky({ dome }: { dome?: (mesh: Mesh | null) => void }) {
   const material = useDisposable(
     () =>
       new ShaderMaterial({
@@ -86,7 +87,7 @@ function Sky() {
       }),
   );
   return (
-    <mesh material={material} renderOrder={-1} frustumCulled={false}>
+    <mesh ref={dome} material={material} renderOrder={-1} frustumCulled={false}>
       <sphereGeometry args={[820, 48, 24]} />
     </mesh>
   );
@@ -274,7 +275,8 @@ function Treeline() {
       [40, 72],
     ];
     for (const [zMin, zMax] of bands) {
-      for (let x = -280; x < 320; x += 3 + random() * 4) {
+      // Stops short of Scene 02's city (x > 240), which has its own trees.
+      for (let x = -280; x < 240; x += 3 + random() * 4) {
         const z = zMin + random() * (zMax - zMin);
         if (random() < 0.6) {
           const h = 8 + random() * 8;
@@ -357,7 +359,7 @@ function Buildings() {
       for (let i = 0; i < count; i++) {
         const w = 12 + random() * 20;
         const h = 7 + random() * 17;
-        o.position.set(-250 + random() * 520, h / 2, zMin + random() * (zMax - zMin));
+        o.position.set(-250 + random() * 450, h / 2, zMin + random() * (zMax - zMin));
         o.scale.set(w, h, 10 + random() * 12);
         o.rotation.set(0, (random() - 0.5) * 0.3, 0);
         o.updateMatrix();
@@ -411,7 +413,11 @@ export function World({ quality, refs }: { quality: Quality; refs: SceneRefs }) 
         color="#9fb3d9"
         intensity={0}
       />
-      <Sky />
+      <Sky
+        dome={(mesh) => {
+          refs.skyDome = mesh;
+        }}
+      />
       <Road quality={quality} />
       <Streetlights quality={quality} />
       <Treeline />

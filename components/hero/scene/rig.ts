@@ -19,8 +19,10 @@ export interface Rig {
   approach: number;
   /** 0..1 blend from the spline camera to the drive-off tracking camera. Owned by the scroll timeline. */
   follow: number;
-  /** 0..1 drive phase, mapped to simulated seconds. Owned by the scroll timeline. */
-  driveT: number;
+  /** Simulated drive seconds: 0–9 is Scene 01's pull-away, beyond that the city journey. */
+  driveSec: number;
+  /** 0..1 along Scene 02's truck-relative camera spline. Owned by the scroll timeline. */
+  cityU: number;
   /** 0..1 pre-dawn sky brightening across the reveal. Owned by the scroll timeline. */
   dawn: number;
   /** Lamp levels (0..~1.04). Owned by the intro. */
@@ -36,7 +38,8 @@ export const createRig = (): Rig => ({
   focal: 35,
   approach: 1,
   follow: 0,
-  driveT: 0,
+  driveSec: 0,
+  cityU: 0,
   dawn: 0,
   marker: 0,
   tail: 0,
@@ -98,36 +101,7 @@ export const focalToFov = (mm: number) =>
   (2 * Math.atan(12 / mm) * 180) / Math.PI;
 
 /**
- * Drive-off kinematics. Scroll maps to simulated time; distance comes from integrating a
- * jerk-limited acceleration (a loaded refuse truck pulls away at well under 1 m/s²).
+ * Scene 01 pull-away: a loaded refuse truck moves off at well under 1 m/s², jerk-ramped.
+ * route.ts integrates this (and the rest of the journey) into one table.
  */
 export const DRIVE = { seconds: 9, accel: 0.85, ramp: 1.4 };
-const STEPS = 720;
-const table = (() => {
-  const distance = new Float32Array(STEPS + 1);
-  const speed = new Float32Array(STEPS + 1);
-  const dt = DRIVE.seconds / STEPS;
-  let v = 0;
-  let d = 0;
-  for (let i = 1; i <= STEPS; i++) {
-    const x = Math.min(1, (i * dt) / DRIVE.ramp);
-    v += DRIVE.accel * x * x * (3 - 2 * x) * dt;
-    d += v * dt;
-    distance[i] = d;
-    speed[i] = v;
-  }
-  return { distance, speed };
-})();
-
-export function driveState(driveT: number) {
-  const f = Math.min(1, Math.max(0, driveT)) * STEPS;
-  const i = Math.min(STEPS - 1, Math.floor(f));
-  const k = f - i;
-  const t = (f / STEPS) * DRIVE.seconds;
-  const x = Math.min(1, t / DRIVE.ramp);
-  return {
-    distance: table.distance[i] + (table.distance[i + 1] - table.distance[i]) * k,
-    speed: table.speed[i] + (table.speed[i + 1] - table.speed[i]) * k,
-    accel: driveT > 0 ? DRIVE.accel * x * x * (3 - 2 * x) : 0,
-  };
-}
