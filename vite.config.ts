@@ -3,16 +3,18 @@ import react from '@vitejs/plugin-react';
 import { existsSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 const root = fileURLToPath(new URL('.', import.meta.url));
-const has = (file: string) => existsSync(`${root}public/media/${file}`);
 export default defineConfig(({ isSsrBuild }) => ({
   plugins: [react()],
   resolve: { alias: { '@': root } },
   define: {
-    __HERO_MEDIA__: JSON.stringify({
-      poster: has('hero-poster.avif'),
-      webm: has('hero-loop.webm'),
-      mp4: has('hero-loop.mp4'),
-    }),
+    // The production truck is a licensed GLB dropped into public/models (see docs/TRUCK_ASSET_SPEC.md).
+    __TRUCK_MODEL__: JSON.stringify(
+      existsSync(`${root}public/models/garbage-truck.glb`),
+    ),
   },
-  build: { target: 'es2022', copyPublicDir: !isSsrBuild },
+  build: {
+    target: 'es2022',
+    copyPublicDir: !isSsrBuild,
+    chunkSizeWarningLimit: 1400,
+  },
 }));

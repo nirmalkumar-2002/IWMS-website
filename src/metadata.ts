@@ -1,19 +1,15 @@
 import { siteConfig } from '@/content/config';
-import { modulesContent } from '@/content/modules';
 import { sharedContent } from '@/content/shared';
 export function getPageMetadata(path: string) {
   const route = path.replace(/\/$/, '') || '/';
-  const item = modulesContent.modules.find(
-    (item) => route === `/modules/${item.slug}`,
-  );
   return {
-    title: item
-      ? `${item.title} | ${siteConfig.name}`
-      : route === '/privacy'
+    title:
+      route === '/privacy'
         ? `${sharedContent.privacyTitle} | ${siteConfig.name}`
-        : siteConfig.title,
-    description: item?.summary ?? siteConfig.description,
-    noindex:
-      route.startsWith('/dev/') || route === '/privacy' || route === '/404',
+        : route === '/' || route === ''
+          ? siteConfig.title
+          : `${sharedContent.notFoundTitle} | ${siteConfig.name}`,
+    description: siteConfig.description,
+    noindex: route === '/privacy' || route === '/404',
   };
 }
