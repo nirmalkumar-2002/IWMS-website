@@ -60,9 +60,24 @@ Every new path or shot in Phase 3 should follow these rules:
 5. **Environment.** Plots on this street are generated in `scene/city/layout.ts`, zone D. Pick a gate plot on the **+X (kerbside) frontage** at z ≈ 150–170 for the pickup.
 6. **Out of scope until Phase 3 is approved:** workers, bins, QR scanning and the pickup animation.
 
-## Frame-hitch investigation
+## Frame-hitch investigation (Phase 2.1)
 
-Pending — see Phase 2.1 report.
+**Finding:** the reported "first time the street end comes into view" hitch was not a first-use cost. On an Intel UHD (0x4628, ANGLE/D3D11) the **high** tier is GPU-bound at about 19–26 ms per frame late in the journey, against a 16.7 ms budget. Chrome keeps issuing frames until a WebGL `CommandBuffer::Flush` in the GPU process blocks for 0.3–4.5 s. This happens on cold passes, warm passes and static views alike.
+
+**Evidence:**
+- During each stall the renderer main thread is idle, and long-animation-frame script time is only about 14 ms.
+- Geometry, texture and program counts stay constant (152 / 65 / 34). There are no `texImage`, `bufferData`, `generateMipmap`, `renderbufferStorage` or shader-compile calls in the stalled frames.
+- The JS heap is flat.
+- Post-processing costs about 10–14 ms of GPU time: bloom about 4–9 ms, SMAA about 3 ms, the rest about 3 ms.
+- The medium tier measures 9–10 ms and never stalls.
+
+**Fix:** `quality.ts` auto-detects Intel integrated GPUs (not Arc) as **medium**. Measured on the same machine, with three interleaved cold runs each in auto-detect mode:
+- worst frame before: 450 ms – 2 s, plus one 39 s hang;
+- worst frame after: 33–50 ms.
+
+`?quality=high` still forces the high tier and still stalls on this GPU.
+
+**Trade-off:** Intel-integrated desktops now render without bloom, vignette, grain or SMAA, at a lower DPR cap. Only one GPU was available for testing. AMD APUs ("Radeon(TM) Graphics") are likely similar but are unverified. An adaptive guard is a possible follow-up: drop bloom and SMAA when `EXT_disjoint_timer_query_webgl2` reports frames over budget.
 
 ## Known limitations carried into Phase 3
 
