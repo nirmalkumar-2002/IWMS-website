@@ -13,6 +13,7 @@ import {
   type Object3D,
   RepeatWrapping,
   SRGBColorSpace,
+  type IUniform,
   type Texture,
   Vector2,
 } from 'three';
@@ -68,6 +69,20 @@ const ORDER: Bucket[] = [
   'skyline',
 ];
 
+/** Buildings, walls and trees cast sun shadows; ground surfaces and buildings receive them. */
+const SHADOW_CASTERS = new Set<Bucket>(['concrete', 'plaster', 'facade', 'facadeDim', 'paint', 'grille', 'foliage']);
+const SHADOW_RECEIVERS = new Set<Bucket>([
+  'ground',
+  'asphalt',
+  'concrete',
+  'pavers',
+  'plaster',
+  'facade',
+  'facadeDim',
+  'paint',
+  'marking',
+]);
+
 /**
  * Scene 02 environment: the main road beyond Scene 01, the city entrance, the junction and the
  * residential street. All static geometry is generated procedurally (seeded, deterministic) and
@@ -113,15 +128,23 @@ export default function City({ quality, refs }: { quality: 'high' | 'medium'; re
         ...extra,
       });
 
+    // Sunrise uniforms (driven by the SunDirector via refs.day.skyline). Defaults of 1 keep the
+    // Scene 01 output: uDots scales the window dots, uTint lifts the silhouette as the sky brightens.
+    const skyline = {
+      uDots: { value: 1 } as IUniform<number>,
+      uTint: { value: 1 } as IUniform<number>,
+    };
     const skylineMat = new MeshBasicMaterial({ vertexColors: true, map: dots });
     skylineMat.onBeforeCompile = (shader) => {
+      shader.uniforms.uDots = skyline.uDots;
+      shader.uniforms.uTint = skyline.uTint;
       // Window dots are added on top of the wall colour (not multiplied). The skyline sits far
       // beyond where the scene fog saturates, so it uses a thinner fog that still follows the
       // animated density: invisible in the outer-road haze, emerging as the city air clears.
-      shader.fragmentShader = shader.fragmentShader
+      shader.fragmentShader = `uniform float uDots;\nuniform float uTint;\n${shader.fragmentShader}`
         .replace(
           '#include <map_fragment>',
-          'diffuseColor.rgb = vColor.rgb + texture2D( map, vMapUv ).rgb * 1.6;',
+          'diffuseColor.rgb = vColor.rgb * uTint + texture2D( map, vMapUv ).rgb * 1.6 * uDots;',
         )
         .replace('#include <color_fragment>', '')
         .replace(
@@ -220,6 +243,11 @@ export default function City({ quality, refs }: { quality: 'high' | 'medium'; re
         mesh.matrixAutoUpdate = false;
         mesh.updateMatrix();
         if (bucket === 'skyline') mesh.renderOrder = 1;
+        // Sun shadows exist only on the high tier (Stage `sunShadows`); flags are fixed at mount.
+        if (high) {
+          mesh.castShadow = SHADOW_CASTERS.has(bucket);
+          mesh.receiveShadow = SHADOW_RECEIVERS.has(bucket);
+        }
         objects.push(mesh);
       }
       if (chunk.wires.length) {
@@ -233,9 +261,20 @@ export default function City({ quality, refs }: { quality: 'high' | 'medium'; re
         objects.push(lines);
       }
     }
+    // Sunrise registration. City streetlight heads have no emissive material of their own: they
+    // are unlit boxes in the shared `glow` bucket with the lit windows, so that MeshBasic material
+    // is registered as window glow (colour scaled from white). Bases are captured here, at
+    // creation, so they are always today's values regardless of when the city mounts.
+    const facadeMats = [materials.facade, materials.facadeDim] as MeshStandardMaterial[];
+    const day = {
+      windows: facadeMats.map((material) => ({ material, base: material.emissiveIntensity })),
+      windowGlow: [materials.glow as MeshBasicMaterial],
+      skyline,
+    };
     return {
       objects,
       lamps: layout.lamps,
+      day,
       dispose() {
         geometries.forEach((g) => g.dispose());
         Object.values(materials).forEach((m) => m.dispose());
@@ -252,6 +291,26 @@ export default function City({ quality, refs }: { quality: 'high' | 'medium'; re
     return () => {
       refs.cityLamps = [];
     };
+  }, [refs, scene]);
+
+  useLayoutEffect(() => {
+    const day = refs.day;
+    const { windows, windowGlow, skyline } = scene.day;
+    // Remove by identity, in place (other consumers may hold the arrays); safe under StrictMode.
+    const strip = () => {
+      for (let i = day.windows.length - 1; i >= 0; i--) {
+        if (windows.some((w) => w.material === day.windows[i].material)) day.windows.splice(i, 1);
+      }
+      for (let i = day.windowGlow.length - 1; i >= 0; i--) {
+        if (windowGlow.includes(day.windowGlow[i])) day.windowGlow.splice(i, 1);
+      }
+      if (day.skyline === skyline) day.skyline = null;
+    };
+    strip();
+    day.windows.push(...windows);
+    day.windowGlow.push(...windowGlow);
+    day.skyline = skyline;
+    return strip;
   }, [refs, scene]);
 
   return (

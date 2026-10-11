@@ -2,6 +2,8 @@ import type {
   DirectionalLight,
   Group,
   HemisphereLight,
+  IUniform,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
   PointLight,
@@ -38,7 +40,48 @@ export interface SceneRefs {
   skyDome: Object3D | null;
   /** City streetlight heads registered by the city layout (world positions + aim points). */
   cityLamps: CityLamp[];
+  /** Phase 2.2 sunrise: lights and materials the SunDirector drives (registered at mount). */
+  day: DayTargets;
 }
+
+/**
+ * Everything the sunrise animates. Registered once at mount; the SunDirector only writes
+ * uniform-level values (colours, intensities), never flags that would recompile shaders.
+ * Every registered `base` is the value used today, so sun = 0 leaves Scene 01 unchanged.
+ */
+export interface DayTargets {
+  /** Sky dome material uniforms (uZenith, uMid, uHorizon, uGlow + sunrise uniforms). */
+  sky: Record<string, IUniform> | null;
+  /** Sun directional light: intensity 0 in Scene 01; exists from the first frame. */
+  sunLight: DirectionalLight | null;
+  keyLight: DirectionalLight | null;
+  rimLight: DirectionalLight | null;
+  /** Emissive streetlight heads (World + city). Faded off around sunrise. */
+  lampHeads: { material: MeshStandardMaterial; base: number }[];
+  /** Emissive lit windows (World backdrop, city facades). Dimmed by daylight. */
+  windows: { material: MeshStandardMaterial; base: number }[];
+  /** Unlit window glow (MeshBasic): colour scaled from its base. */
+  windowGlow: MeshBasicMaterial[];
+  /** Scene 01's fixed real street spot lights. */
+  streetSpots: { light: SpotLight; base: number }[];
+  /** City skyline shader uniforms: `uDots` scales window dots, `uTint` lifts the silhouette. */
+  skyline: { uDots: IUniform<number>; uTint: IUniform<number> } | null;
+  /** Current sunrise progress (0..1), written by the SunDirector before other consumers run. */
+  progress: number;
+}
+
+export const createDayTargets = (): DayTargets => ({
+  sky: null,
+  sunLight: null,
+  keyLight: null,
+  rimLight: null,
+  lampHeads: [],
+  windows: [],
+  windowGlow: [],
+  streetSpots: [],
+  skyline: null,
+  progress: 0,
+});
 
 export interface CityLamp {
   x: number;
@@ -64,6 +107,7 @@ export const createSceneRefs = (): SceneRefs => ({
   fill: null,
   skyDome: null,
   cityLamps: [],
+  day: createDayTargets(),
 });
 
 /** Shared lamp geometry, in truck-local metres (front axle origin, +X forward). */

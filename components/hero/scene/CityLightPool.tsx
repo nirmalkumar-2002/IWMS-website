@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { Object3D, type SpotLight } from 'three';
 import type { CityLamp, SceneRefs } from './handles';
 import { TRUCK_LANE_Z } from './rig';
+import { streetLampOn } from './sun';
 
 /** Real-light radius around the truck; beyond FADE_END a pooled light is dark and free to move. */
 const FADE_START = 30;
@@ -59,7 +60,9 @@ export function CityLightPool({ refs, count }: { refs: SceneRefs; count: number 
       light.color.set(lamp.color);
       targets[i].position.set(lamp.tx, 0, lamp.tz);
       targets[i].updateMatrixWorld();
-      light.intensity = lamp.candela * fade(reach(lamp));
+      // Per-lamp photocell: each real light switches off at its own point in the sunrise.
+      light.intensity =
+        lamp.candela * fade(reach(lamp)) * streetLampOn(refs.day.progress, lamp.x, lamp.z);
     }
   });
 

@@ -12,6 +12,8 @@ import { ACESFilmicToneMapping } from 'three';
 import 'lenis/dist/lenis.css';
 import { CityLightPool } from './scene/CityLightPool';
 import { Director } from './scene/Director';
+import { SunDirector } from './scene/SunDirector';
+import { sunAt } from './scene/sun';
 import {
   RESIDENTIAL,
   WHEELBASE,
@@ -73,6 +75,8 @@ function CityMount({ quality, refs }: Pick<StageProps, 'quality'> & { refs: Scen
               }
             });
             root.visible = true;
+            const sunLight = refs.day.sunLight;
+            if (sunLight?.castShadow) sunLight.shadow.needsUpdate = true;
             const previous = gl.getRenderTarget();
             gl.setRenderTarget(target);
             gl.render(scene, camera);
@@ -149,6 +153,20 @@ function DebugHook({ rig, refs }: { rig: ReturnType<typeof createRig>; refs: Sce
         return { x: p.x, z: p.z, yaw: -drive.rotation.y };
       },
       geometry: () => ({ residentialAxisX: RESIDENTIAL.axisX }),
+      /** Phase 2.2: sunrise state as applied this frame (progress is a pure function of distance). */
+      sun: () => {
+        const d = driveAt(rig.driveSec, scratch).distance;
+        const sky = refs.day.sky;
+        return {
+          distance: d,
+          expected: sunAt(d),
+          progress: refs.day.progress,
+          sunLight: refs.day.sunLight?.intensity ?? 0,
+          hemisphere: refs.sky?.intensity ?? 0,
+          zenith: sky ? (sky.uZenith.value as { getHexString(): string }).getHexString() : null,
+          lampHeads: refs.day.lampHeads.map((l) => l.material.emissiveIntensity),
+        };
+      },
       info: () => ({
         calls: frame.current.calls,
         triangles: frame.current.triangles,
@@ -207,6 +225,8 @@ function LoadingLine() {
 }
 
 export default function Stage({ quality, still, section, onReady, onFail }: StageProps) {
+  // Real-time sun shadows only where the GPU budget allows (decided from Phase 2.2 measurements).
+  const sunShadows = quality === 'high' && !still;
   const [rig] = useState(() => {
     const initial = createRig();
     if (still) applyStill(initial, STILL_SHOT);
@@ -233,6 +253,7 @@ export default function Stage({ quality, still, section, onReady, onFail }: Stag
         className="hero__canvas"
         dpr={quality === 'high' ? [1, 1.75] : [1, 1.25]}
         frameloop={still ? 'demand' : 'always'}
+        shadows={sunShadows ? 'percentage' : false}
         gl={{
           antialias: quality !== 'high',
           powerPreference: 'high-performance',
@@ -248,9 +269,10 @@ export default function Stage({ quality, still, section, onReady, onFail }: Stag
         }}
       >
         <Suspense fallback={null}>
-          <World quality={quality} refs={refs} />
+          <World quality={quality} refs={refs} sunShadows={sunShadows} />
           <Truck refs={refs} />
           <Director rig={rig} refs={refs} still={still} />
+          <SunDirector rig={rig} refs={refs} still={still} sunShadows={sunShadows} />
           {!still && <CityLightPool refs={refs} count={quality === 'high' ? 3 : 2} />}
           <DebugHook rig={rig} refs={refs} />
           {quality === 'high' && <Effects />}

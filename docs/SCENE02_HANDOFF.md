@@ -15,9 +15,9 @@ Scene 02 (city entry) ends with the truck rolling slowly into the residential st
 | Speed | ≈ 2.4 m/s (8.6 km/h), easing toward 2.2 m/s |
 | Steering | straight (curvature 0) |
 | Wheel spin | `−distance / radius`, continuous with every earlier scene |
-| Lamps | markers, tail, both headlights and beams at 1 |
-| Sky / dawn | `rig.dawn = 1` |
-| Fog | FogExp2 `#2a3650`, density `fogDensityAt(697.67)` = 0.0085 |
+| Lamps | truck markers, tail and headlights on (1); fog beams scaled to 0.35 in daylight |
+| Sky / dawn | `rig.dawn = 1`; **sunrise progress = 1** (`sunAt(697.67)`, early-morning sun) |
+| Fog | FogExp2 colour `#9ea7b6` (morning haze), density `fogDensityAt(697.67) × 0.75` ≈ 0.0064 |
 | Camera key `arrive` (truck-local: x fwd, y up, z = truck's right) | pos (−15, 5.6, 0.6), target (16, 1.2, 1.0), 28 mm |
 | Camera (world) | ≈ (577.58, 5.6, 114.0), looking at ≈ (577.18, 1.2, 145.0) |
 | Camera mode | Scene 02 truck-relative chase (`cityU = 1`), local offset damped (λ 3.2 / 4) |
@@ -35,6 +35,33 @@ Here the truck faces +Z, so truck-local +z (its right) is world −X. That side 
   - Painted black/yellow kerb on the −Z side of the approach.
   - Stop line at z −1.6.
   - Residential poles stand at axisX − 3.75, with arms reaching over the street.
+
+## Sunrise (Phase 2.2)
+
+- **Single source of truth.** `sunAt(distance)` in `scene/sun.ts` is a monotone cubic through these points:
+
+  | Distance | ≤ 40 | 150 | 330 | 455 | 620 | `JOURNEY_END − 1` (≈ 696.7) |
+  |---|---|---|---|---|---|---|
+  | Progress | 0 | 0.15 | 0.40 | 0.62 | 0.90 | 1 |
+
+  It is 0 for all of Scene 01 and in reduced motion, and identical forward and in reverse.
+- **Who applies it.** `SunDirector.tsx` runs right after the Director and writes only uniform-level values (colours, intensities, light direction). Lights and shadow flags are fixed at mount, so nothing recompiles while scrolling.
+- **What the end state looks like:**
+  - The sky zenith is `#31548c`, and the horizon a warm grey `#cdc6b9`.
+  - The sun sits at azimuth +12° (from +X toward +Z) and elevation +9°.
+  - The sun's directional light is colour `#ffc78f`, intensity 1.4, aimed at 12° elevation. On the high tier it moves with the truck and casts shadows (2048 map, ±40 m ortho, snapped to texels).
+  - The hemisphere light is `#a9bddb` / `#3a3530`.
+  - The key light is 0.12 and the rim light 0.25.
+  - Streetlights are off. Each pooled lamp switches off at its own point, like a photocell, between progress 0.55 and 0.66.
+  - Lit windows are at 15%.
+- **Tiers.**
+  - **High:** sun shadows, cast by city buildings, walls and trees and by the truck.
+  - **Medium (Intel integrated and mobile):** the same sunrise but no shadow map. The truck keeps its contact-shadow blob.
+  - The sun reads as a glow painted into the sky shader, capped below bloom's threshold, so it looks the same without bloom.
+- **For Scene 03:** read `refs.day.progress` (it stays 1), and don't add a second owner for daylight. Any new lit materials should register in `refs.day` with their night value as `base`.
+- **Known gaps:**
+  - Reflections still come from the environment baked at night; only its intensity is ramped.
+  - City streetlight heads share a material with lit windows, so they dim to the window level (15%) rather than switching fully off.
 
 ## Left-hand traffic conventions
 
