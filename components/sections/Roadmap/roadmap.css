@@ -1,0 +1,282 @@
+/* Roadmap — an editorial Gantt: six phases plotted on a 12-month hairline scale. */
+.roadmap {
+  --roadmap-cols: minmax(0, 1fr);
+}
+
+.roadmap-head {
+  display: grid;
+  gap: clamp(1.5rem, 4vw, 4rem);
+  align-items: end;
+}
+
+.roadmap-heading {
+  max-width: 12ch;
+  font-size: clamp(2.4rem, 6.2vw, 6.5rem);
+  letter-spacing: -0.05em;
+  line-height: 0.98;
+}
+
+.roadmap-description {
+  margin: 0;
+  max-width: 34rem;
+  font-size: var(--text-lead);
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.roadmap-chart {
+  margin-top: clamp(3.5rem, 7vw, 6.5rem);
+}
+
+/* Month scale */
+.roadmap-scale {
+  display: grid;
+  grid-template-columns: var(--roadmap-cols);
+  column-gap: clamp(1.5rem, 4vw, 4rem);
+  align-items: end;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.roadmap-scale-label {
+  display: none;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.roadmap-scale-track {
+  position: relative;
+  height: 1.25rem;
+}
+
+.roadmap-tick {
+  position: absolute;
+  bottom: 0;
+  left: calc(var(--start) / var(--total) * 100%);
+  transform: translateX(-50%);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.roadmap-tick:first-child {
+  transform: none;
+}
+
+.roadmap-tick:last-child {
+  transform: translateX(-100%);
+  color: var(--orange-500);
+}
+
+/* Phases */
+.roadmap-phases {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.roadmap-phase {
+  display: grid;
+  grid-template-columns: var(--roadmap-cols);
+  column-gap: clamp(1.5rem, 4vw, 4rem);
+  row-gap: 1.25rem;
+  padding-block: clamp(1.5rem, 3vw, 2.25rem);
+  border-bottom: 1px solid var(--line);
+}
+
+.roadmap-phase-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  margin: 0 0 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.roadmap-phase-num {
+  color: var(--lime-400);
+}
+
+.roadmap-phase-period {
+  color: var(--text-muted);
+}
+
+.roadmap-phase-title {
+  margin: 0;
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: clamp(1.3rem, 2.2vw, 1.875rem);
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  line-height: 1.12;
+  text-wrap: balance;
+}
+
+.roadmap-phase-body {
+  margin: 0.6rem 0 0;
+  font-size: 1rem;
+  line-height: 1.55;
+  color: var(--text-light);
+}
+
+.roadmap-phase-list {
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.roadmap-phase-list li {
+  position: relative;
+  padding-left: 1.25rem;
+  font-size: 1rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.roadmap-phase-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.78em;
+  width: 0.6rem;
+  height: 1px;
+  background: var(--line-strong);
+}
+
+/* Track: month gridlines, the phase bar, and an orange Month-12 marker. */
+.roadmap-track {
+  position: relative;
+  height: 1.75rem;
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--line) 0 1px,
+    transparent 1px calc(100% / var(--total))
+  );
+}
+
+.roadmap-track::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 1px;
+  background: var(--orange-500);
+}
+
+.roadmap-bar {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--start) / var(--total) * 100%);
+  width: calc((var(--end) - var(--start)) / var(--total) * 100%);
+  height: 0.6rem;
+  margin-top: -0.3rem;
+  background: var(--lime-400);
+  transform-origin: left center;
+}
+
+.roadmap-bar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: -0.55rem;
+  bottom: -0.55rem;
+  width: 1px;
+  background: var(--lime-400);
+}
+
+/* Outcome */
+.roadmap-outcome {
+  display: grid;
+  gap: 1rem;
+  margin-top: clamp(3.5rem, 8vw, 7rem);
+}
+
+.roadmap-outcome-kicker {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--orange-500);
+}
+
+.roadmap-outcome-text {
+  margin: 0;
+  max-width: 16ch;
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: clamp(2rem, 5vw, 5rem);
+  font-weight: 500;
+  letter-spacing: -0.05em;
+  line-height: 1;
+  text-wrap: balance;
+}
+
+.roadmap-outcome-note {
+  margin: 0;
+  max-width: 34rem;
+  font-size: var(--text-lead);
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+@media (min-width: 768px) {
+  .roadmap-head {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .roadmap {
+    --roadmap-cols: minmax(0, 5fr) minmax(0, 7fr);
+  }
+  .roadmap-scale-label {
+    display: block;
+  }
+  .roadmap-phase {
+    align-items: center;
+  }
+  .roadmap-track {
+    align-self: stretch;
+    height: auto;
+    min-height: 4rem;
+  }
+  .roadmap-outcome {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    column-gap: clamp(1.5rem, 4vw, 4rem);
+    align-items: baseline;
+  }
+  .roadmap-outcome-kicker {
+    grid-row: 1 / span 2;
+  }
+  .roadmap-outcome-note {
+    grid-column: 2;
+  }
+}
+
+/* Progressive enhancement: bars draw in along the scale as each phase scrolls into view.
+   Default (no support, reduced motion, no JS) shows full bars. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .roadmap-bar {
+      animation: roadmap-bar-draw linear both;
+      animation-timeline: view();
+      animation-range: entry 20% cover 40%;
+    }
+  }
+}
+
+@keyframes roadmap-bar-draw {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}

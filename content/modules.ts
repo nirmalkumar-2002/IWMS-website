@@ -1,17 +1,71 @@
-import type { ModulesContent } from './types';
+import type { ContentItem, ModuleContent, ModulesContent } from './types';
+
+/** A module entry: the shared ModuleContent shape plus editorial fields used by the index and detail page. */
+export type ModuleEntry = ModuleContent & {
+  /** Where in the waste chain this module operates (editorial framing of PDF p.4). */
+  stage: string;
+  /** One-line headline used on the module detail page. */
+  lead: string;
+  features: ContentItem[];
+};
+
+export type ModulesSectionContent = ModulesContent & {
+  modules: ModuleEntry[];
+  labels: {
+    moduleCount: string;
+    capabilityCount: string;
+    capabilities: string;
+    stage: string;
+    module: string;
+    of: string;
+    viewModule: string;
+    allModules: string;
+    previous: string;
+    next: string;
+    pager: string;
+    breadcrumb: string;
+    featuresHeading: string;
+    ctaTitle: string;
+    ctaBody: string;
+    indexLabel: string;
+  };
+};
+
 export const modulesContent = {
   id: 'modules',
   eyebrow: 'ONE CONNECTED PLATFORM',
   title: 'Seven modules. End-to-end oversight.',
-  description: 'Explore the operational capabilities of IWMS.',
+  description:
+    'From the QR code on a household gate to the weighbridge, the processing plant and the landfill, each IWMS module covers one link in the municipal waste chain — and every module reports into the same platform.',
   source: {
     pages: [4, 6, 8, 10, 12, 14, 16, 18],
   },
   items: [],
+  labels: {
+    moduleCount: 'modules',
+    capabilityCount: 'capabilities',
+    capabilities: 'Capabilities',
+    stage: 'Stage',
+    module: 'Module',
+    of: 'of',
+    viewModule: 'Open module page',
+    allModules: 'All modules',
+    previous: 'Previous module',
+    next: 'Next module',
+    pager: 'Module navigation',
+    breadcrumb: 'Breadcrumb',
+    featuresHeading: 'What the module does',
+    ctaTitle: 'See this module working on your city’s data.',
+    ctaBody:
+      'IWMS is rolled out in phases over twelve months. We can walk your team through this module and how it connects to the rest of the platform.',
+    indexLabel: 'IWMS modules',
+  },
   modules: [
     {
       slug: 'collection-verification',
       title: 'Collection & Verification',
+      stage: 'At the doorstep',
+      lead: 'Every pickup, verified at the household and bin level.',
       summary:
         'Validate waste pickups through QR codes, event logging and citizen notifications.',
       source: {
@@ -47,6 +101,8 @@ export const modulesContent = {
     {
       slug: 'd2d-logistics',
       title: 'D2D Collection & Logistics Management',
+      stage: 'On the road',
+      lead: 'Every collection vehicle, visible on one map.',
       summary:
         'Monitor vehicles with GPS, route optimisation, fuel tracking and automated fraud prevention.',
       source: {
@@ -78,6 +134,8 @@ export const modulesContent = {
     {
       slug: 'resource-management',
       title: 'Resource Management',
+      stage: 'Across the workforce',
+      lead: 'The right crew on the right route, on record.',
       summary:
         'Digitally manage attendance, route assignments and performance reports.',
       source: {
@@ -105,6 +163,8 @@ export const modulesContent = {
     {
       slug: 'weighbridge-management',
       title: 'Weighbridge Management',
+      stage: 'At the weighbridge',
+      lead: 'What was collected, reconciled against what arrived.',
       summary:
         'Track quantities through IoT sensors, weighbridges and reconciliation alerts.',
       source: {
@@ -129,13 +189,15 @@ export const modulesContent = {
         },
         {
           title: 'Calibration monitoring',
-          body: 'Calibration schedule alerts and certificate-renewal reminders.',
+          body: 'Calibration schedule alerts and certificate-renewal reminders for weighbridge compliance.',
         },
       ],
     },
     {
       slug: 'waste-management',
       title: 'Waste Management (Processing)',
+      stage: 'At the processing plant',
+      lead: 'Each waste stream logged and routed to the right treatment.',
       summary:
         'Log and manage waste segregation and processing across treatment facilities.',
       source: {
@@ -168,6 +230,8 @@ export const modulesContent = {
     {
       slug: 'landfill-management',
       title: 'Landfill Management',
+      stage: 'At the landfill',
+      lead: 'Safe, transparent and compliant landfill operations.',
       summary:
         'Support safe, transparent operations through tracking, analytics, safety and reporting.',
       source: {
@@ -207,6 +271,8 @@ export const modulesContent = {
     {
       slug: 'grievance-redressal',
       title: 'Grievance Redressal Management',
+      stage: 'With citizens',
+      lead: 'Every complaint heard, routed and resolved on record.',
       summary:
         'Capture complaints and feedback with escalation workflows and analytics.',
       source: {
@@ -232,4 +298,4 @@ export const modulesContent = {
       ],
     },
   ],
-} satisfies ModulesContent;
+} satisfies ModulesSectionContent;

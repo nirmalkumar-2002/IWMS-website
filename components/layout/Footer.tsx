@@ -11,7 +11,7 @@ export function Footer() {
           <div>
             <a
               href="/#platform"
-              className="footer-brand brand-logos"
+              className="footer-brand brand-logos brand-plate"
               aria-label={sharedContent.home}
             >
               <img

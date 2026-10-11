@@ -11,7 +11,7 @@ test('marketing home hydrates without errors and fits 360px', async ({
   await page.setViewportSize({ width: 360, height: 800 });
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-    'From doorstep pickup to landfill. One accountable platform.',
+    'Every pickup. Every kilo. Accounted for.',
   );
   expect(
     await page.evaluate(

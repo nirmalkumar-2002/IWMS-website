@@ -14,5 +14,5 @@ export const siteConfig = {
   locale: 'en-IN',
   title: 'IWMS | Integrated Waste Management Suite',
   description:
-    'A unified digital platform for municipal waste collection, verification, processing and landfill management.',
+    'IWMS connects QR-verified collection, GPS fleets, IoT weighbridges and citizen apps into one accountable waste management platform for Indian cities.',
 } as const;

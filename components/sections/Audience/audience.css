@@ -1,0 +1,196 @@
+/* Audience — editorial index on paper. Hairline rows, large numerals, no cards. */
+.audience {
+  --audience-ink: var(--ink-950);
+  --audience-muted: #46505e;
+  --audience-rule: rgba(6, 11, 20, 0.14);
+  --audience-rule-strong: rgba(6, 11, 20, 0.6);
+  overflow-x: clip;
+}
+
+.audience-head {
+  display: grid;
+  gap: 1.75rem;
+  padding-bottom: clamp(3rem, 7vw, 6rem);
+}
+
+.audience-title.heading {
+  max-width: 16ch;
+  font-size: clamp(2.25rem, 5.6vw, 5.5rem);
+  letter-spacing: -0.045em;
+}
+
+.audience-lead {
+  max-width: 34rem;
+  margin: 0;
+  font-size: var(--text-lead);
+  line-height: 1.55;
+  color: var(--audience-muted);
+}
+
+.audience-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--audience-rule-strong);
+}
+
+.audience-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 3rem minmax(0, 1fr);
+  gap: 0.75rem 1rem;
+  padding-block: clamp(1.75rem, 3.6vw, 3rem);
+  border-bottom: 1px solid var(--audience-rule);
+}
+
+/* A green hairline draws across the row on hover — the only accent motion. */
+.audience-row::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: var(--green-600);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.9s var(--ease-out);
+}
+
+.audience-row:hover::after {
+  transform: scaleX(1);
+}
+
+.audience-index {
+  grid-row: span 2;
+  font-family: var(--font-display), sans-serif;
+  font-size: 1rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: var(--green-600);
+  padding-top: 0.45rem;
+}
+
+.audience-name,
+.audience-detail {
+  min-width: 0;
+}
+
+.audience-row-title {
+  margin: 0;
+  font-family: var(--font-display), sans-serif;
+  font-size: clamp(1.5rem, 2.8vw, 2.5rem);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  color: var(--audience-ink);
+  text-wrap: balance;
+}
+
+.audience-role {
+  margin: 0.75rem 0 0;
+  font-size: 1rem;
+  color: var(--audience-muted);
+}
+
+.audience-body {
+  max-width: 36rem;
+  margin: 0;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  color: var(--audience-ink);
+}
+
+.audience-focus {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0;
+  margin: 1.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.audience-focus li {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--green-600);
+}
+
+.audience-focus li + li::before {
+  content: '/';
+  margin-inline: 0.65rem;
+  color: var(--audience-rule-strong);
+  font-weight: 400;
+}
+
+.audience-source {
+  margin: 1rem 0 0;
+  font-size: 0.875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--audience-muted);
+}
+
+.audience-closing {
+  display: grid;
+  gap: 1rem;
+  margin-top: clamp(3.5rem, 8vw, 7rem);
+}
+
+.audience-closing-label {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--green-600);
+}
+
+.audience-closing-statement {
+  max-width: 22ch;
+  margin: 0;
+  font-family: var(--font-display), sans-serif;
+  font-size: clamp(1.75rem, 3.6vw, 3.25rem);
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+  color: var(--audience-ink);
+  text-wrap: balance;
+}
+
+@media (min-width: 768px) {
+  .audience-row {
+    grid-template-columns: 4.5rem minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .audience-head {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 4fr);
+    align-items: end;
+    column-gap: clamp(2rem, 6vw, 8rem);
+  }
+
+  .audience-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 5fr) minmax(0, 6fr);
+    column-gap: clamp(1.5rem, 3vw, 3.5rem);
+    align-items: start;
+  }
+
+  .audience-index {
+    grid-row: auto;
+  }
+
+  .audience-closing {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 11fr);
+    column-gap: clamp(1.5rem, 3vw, 3.5rem);
+    align-items: baseline;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .audience-row::after {
+    transition: none;
+  }
+}

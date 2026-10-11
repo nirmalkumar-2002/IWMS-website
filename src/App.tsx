@@ -27,7 +27,7 @@ export default function App({ path }: { path: string }) {
       <a className="skip-link" href="#main-content">
         {sharedContent.skip}
       </a>
-      <Header />
+      <Header overlay={route === '/'} />
       <main id="main-content" tabIndex={-1}>
         {page}
       </main>

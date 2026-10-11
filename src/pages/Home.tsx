@@ -13,10 +13,9 @@ import Roadmap from '@/components/sections/Roadmap';
 import Audience from '@/components/sections/Audience';
 import FAQ from '@/components/sections/FAQ';
 import FinalCTA from '@/components/sections/FinalCTA';
-import { ScrollExperience } from '@/components/scene/ScrollExperience';
 export default function Home() {
   return (
-    <ScrollExperience>
+    <>
       <Hero />
       <Problem />
       <Journey />
@@ -32,6 +31,6 @@ export default function Home() {
       <Audience />
       <FAQ />
       <FinalCTA />
-    </ScrollExperience>
+    </>
   );
 }
