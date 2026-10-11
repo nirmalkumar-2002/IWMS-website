@@ -46,7 +46,8 @@ const AX = RESIDENTIAL.axisX;
 const RES_HALF = RESIDENTIAL.width / 2;
 const RES_END = RESIDENTIAL.startZ + RESIDENTIAL.length;
 const CORNER_R = 5;
-const MEDIAN = { z0: -1.2, z1: 0, h: 0.3 };
+// Left-hand traffic: the median sits on the truck's right, the +Z side of the centre line.
+const MEDIAN = { z0: 0, z1: 1.2, h: 0.3 };
 
 export interface CityLayout {
   chunks: Chunk[];
@@ -65,12 +66,17 @@ const asphaltUV = (p: V3): [number, number] => [
   (ROAD.halfW - p[2]) / ROAD.tile,
 ];
 
-/** Inner-corner kerb line of the right turn: the rear-axle path offset to the truck's right. */
-function innerCurve(offset: number): V3[] {
+/**
+ * Inner-corner kerb line of the right turn: the rear-axle path offset to the truck's right.
+ * From the left lane the far (+Z) kerb starts 5.25 m to the right (lane −1.75 → kerb +3.5) and
+ * the street's carriageway edge ends 4.5 m to the right (truck at axis + 1.5 → edge axis − 3).
+ */
+function innerCurve(extra: number): V3[] {
   const s = {} as PathSample;
   const pts: V3[] = [];
   for (let d = TURN_START_X; d < TURN_START_X + 80; d += 1) {
     samplePath(d, s);
+    const offset = ROAD.halfW - TRUCK_LANE_Z - 0.75 * (s.yaw / (Math.PI / 2)) + extra;
     pts.push([s.x - Math.sin(s.yaw) * offset, 0, s.z + Math.cos(s.yaw) * offset]);
     if (s.yaw >= Math.PI / 2 - 1e-4) break;
   }
@@ -136,7 +142,7 @@ function buildRoads(road: Chunk, r: Rng, lamps: CityLamp[], medium: boolean) {
   );
 
   // Inner-corner fillet: asphalt fan from the mouth corner to the swept-path kerb.
-  const curve = innerCurve(TRUCK_LANE_Z);
+  const curve = innerCurve(0);
   const corner: V3 = [AX - RES_HALF, 0, ROAD.halfW];
   for (let i = 0; i < curve.length - 1; i++) {
     triUp(asp, corner, curve[i + 1], curve[i]);
@@ -169,9 +175,10 @@ function buildRoads(road: Chunk, r: Rng, lamps: CityLamp[], medium: boolean) {
   const yellow = rgb('#a8913f');
   const black = rgb('#262626');
   for (let x = 520, i = 0; x < TURN_START_X; x += 1, i++)
-    road.g('paint').box(x, 0, ROAD.halfW - 0.005, x + 1, ROAD.kerb + 0.005, ROAD.halfW + ROAD.kerbW + 0.005, i % 2 ? yellow : black, {
+    // On the truck's (−Z, left) kerb.
+    road.g('paint').box(x, 0, -ROAD.halfW - ROAD.kerbW - 0.005, x + 1, ROAD.kerb + 0.005, -ROAD.halfW + 0.005, i % 2 ? yellow : black, {
       uv: 'flat',
-      skip: FACE.NY | FACE.PZ,
+      skip: FACE.NY | FACE.NZ,
     });
 
   // Residential carriageway (concrete, joints every 4.5 m) + drain-cover verges.
@@ -208,7 +215,7 @@ function buildRoads(road: Chunk, r: Rng, lamps: CityLamp[], medium: boolean) {
   edge(AX + RES_HALF + CORNER_R + 1, ROAD_END, ROAD.halfW - 0.25);
   // Zebra crossing and stop line before the junction.
   for (let z = -3.0; z <= 3.01; z += 1.0) mark.quad([551.5, 0.004, z], [0, 1, 0], [0, 0, -1], 1.5, 0.25, rgb('#bdb8a6'));
-  mark.quad([548.6, 0.004, 1.6], [0, 1, 0], [0, 0, -1], 0.15, 1.6, paint);
+  mark.quad([548.6, 0.004, -1.6], [0, 1, 0], [0, 0, -1], 0.15, 1.6, paint);
   // Speed breaker: smooth hump with black/yellow bands.
   for (let i = 0, z = -ROAD.halfW; z < ROAD.halfW - 0.01; z += 0.7, i++) {
     const left: V3[] = [];
@@ -225,7 +232,8 @@ function buildRoads(road: Chunk, r: Rng, lamps: CityLamp[], medium: boolean) {
 
   // Median with painted kerbs and twin-arm lights (gap at the junction).
   const medianRuns: [number, number][] = [
-    [490, 562],
+    // First run ends at x 550 so the right turn clears the median nose (≈0.5 m).
+    [490, 550],
     [AX + RES_HALF + CORNER_R + 4, ROAD_END],
   ];
   for (const [x0, x1] of medianRuns) {
@@ -246,7 +254,7 @@ function buildRoads(road: Chunk, r: Rng, lamps: CityLamp[], medium: boolean) {
       if (medium && x > 700) break;
       twinArmLight(road, x, (MEDIAN.z0 + MEDIAN.z1) / 2, lamps);
     }
-    for (let x = x0 + 3; x < x1 - 2; x += r.range(4, 7)) shrub(road, x, -0.6, r, r.range(0.5, 0.9));
+    for (let x = x0 + 3; x < x1 - 2; x += r.range(4, 7)) shrub(road, x, (MEDIAN.z0 + MEDIAN.z1) / 2, r, r.range(0.5, 0.9));
   }
 
   // LED streetlights continue on -Z beyond Scene 01's last post, until the median takes over.
@@ -558,7 +566,7 @@ function zoneD(c: Chunk, r: Rng, lamps: CityLamp[]) {
   }
   // Left inner corner (truck sweeps through it): low wall, shrubs only.
   const lowWall = rgb('#9d988c');
-  const curve = innerCurve(TRUCK_LANE_Z + ROAD.kerbW + ROAD.walk + 0.4);
+  const curve = innerCurve(ROAD.kerbW + ROAD.walk + 0.4);
   for (let i = 0; i < curve.length - 1; i += 2) {
     const a = curve[i];
     const b = curve[Math.min(curve.length - 1, i + 2)];
@@ -577,10 +585,11 @@ function zoneD(c: Chunk, r: Rng, lamps: CityLamp[]) {
   }
   for (let k = 0; k < 6; k++) shrub(c, r.range(530, 566), r.range(14, 36), r, r.range(0.6, 1.2));
 
-  // Electric poles with LED fittings every 30 m on the +X side, wires between them.
+  // Electric poles with LED fittings every 30 m on the −X side (away from the truck's
+  // left-hand lane), arms reaching over the street, wires between them.
   let prev: V3[] | null = null;
   for (let z = 12; z < RES_END; z += 30) {
-    const pts = residentialPole(c, AX + 3.75, z, -1, lamps);
+    const pts = residentialPole(c, AX - 3.75, z, 1, lamps);
     if (prev) for (let i = 0; i < 3; i++) wire(c, prev[i], pts[i], 0.5);
     // Service drops to a couple of houses.
     for (const s of [-1, 1]) wire(c, pts[0], [AX + s * 7, 7.2, z + 6], 0.15);

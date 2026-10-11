@@ -2,15 +2,26 @@ import { test, expect, type Page } from '@playwright/test';
 
 /**
  * Scene 02 (city entry) QA. Runs on the real-GPU project with `?debug`, which exposes
- * `window.__iwmsHero = { rig, distance(), info() }`. Nothing here depends on city visuals.
+ * `window.__iwmsHero` (see HeroDebug). Nothing here depends on city visuals.
  */
 
 const SCENE1_END_DISTANCE = 29.4;
 const JOURNEY_MIN_END = 680;
 
+interface TruckPose {
+  x: number;
+  z: number;
+  yaw: number;
+}
 interface HeroDebug {
-  rig: { driveSec: number; cityU: number };
+  rig: { driveSec: number; cityU: number; approach: number };
   distance: () => number;
+  camera: () => [number, number, number];
+  /** Front-axle pose from the pure route maths (yaw from +X toward +Z). */
+  truck: () => TruckPose & { distance: number };
+  /** Rendered truck root in world space; null before the truck mounts. */
+  truckWorld: () => TruckPose | null;
+  geometry: () => { residentialAxisX: number };
   info: () => { programs: number };
 }
 type Snapshot = { distance: number; cityU: number; driveSec: number };

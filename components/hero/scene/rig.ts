@@ -2,9 +2,10 @@ import { CatmullRomCurve3, Vector3 } from 'three';
 
 /**
  * World conventions (1 unit = 1 m, Y up): the road runs along X and the truck faces +X.
- * The truck root sits on the front axle centre, in the +Z lane.
+ * The truck root sits on the front axle centre. India keeps LEFT: heading +X, the truck's
+ * left is −Z, so it drives in the −Z lane of the 7 m road centred on z = 0.
  */
-export const TRUCK_LANE_Z = 1.75;
+export const TRUCK_LANE_Z = -1.75;
 
 /**
  * Mutable state written by GSAP timelines and read every frame by the Director.
@@ -58,18 +59,18 @@ export interface Shot {
 
 /** Camera key poses. Spline knots, sampled with getPoint(i / (n - 1)) so each shot lands exactly. */
 export const SHOTS: Shot[] = [
-  { id: 'activation', pos: [26, 0.75, 9.5], target: [-3, 1.5, 1.75], focal: 35 },
-  { id: 'front34', pos: [8.6, 0.55, 7.4], target: [-2, 1.45, 1.75], focal: 24 },
-  { id: 'headlight', pos: [5.8, 1.2, 5.3], target: [1.3, 1.15, 2.2], focal: 70 },
-  { id: 'wheel', pos: [-1.6, 0.5, 6.3], target: [-0.3, 0.72, 2.85], focal: 50 },
-  { id: 'side', pos: [-3.4, 1.7, 17], target: [-3.4, 2.5, 1.75], focal: 50 },
-  { id: 'rear34', pos: [-19, 1.3, 9.5], target: [-3.5, 1.6, 1.75], focal: 35 },
+  { id: 'activation', pos: [26, 0.75, 6], target: [-3, 1.5, -1.75], focal: 35 },
+  { id: 'front34', pos: [8.6, 0.55, 3.9], target: [-2, 1.45, -1.75], focal: 24 },
+  { id: 'headlight', pos: [5.8, 1.2, 1.8], target: [1.3, 1.15, -1.3], focal: 70 },
+  { id: 'wheel', pos: [-1.6, 0.5, 2.8], target: [-0.3, 0.72, -0.65], focal: 50 },
+  { id: 'side', pos: [-3.4, 1.7, 13.5], target: [-3.4, 2.5, -1.75], focal: 50 },
+  { id: 'rear34', pos: [-19, 1.3, 6], target: [-3.5, 1.6, -1.75], focal: 35 },
 ];
 
 /** Establishing pose: a distant, low dolly that settles onto SHOTS[0] during the intro. */
 const ESTABLISHING = {
-  pos: new Vector3(40, 0.55, 13),
-  target: new Vector3(-4, 1.7, 1.75),
+  pos: new Vector3(40, 0.55, 9.5),
+  target: new Vector3(-4, 1.7, -1.75),
 };
 export const APPROACH_POS = ESTABLISHING.pos
   .clone()

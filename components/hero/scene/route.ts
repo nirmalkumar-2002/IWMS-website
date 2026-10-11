@@ -12,8 +12,9 @@ import { DRIVE, TRUCK_LANE_Z } from './rig';
 export const WHEELBASE = 5.075;
 
 /** Main road: straight along +X. The right turn into the residential street begins here. */
-export const TURN_START_X = 548;
-const TURN_RADIUS = 22;
+export const TURN_START_X = 547.5;
+/** Right turn from the left lane, across the oncoming carriageway, into the street's left lane. */
+const TURN_RADIUS = 25.524;
 /** Curvature eases in/out over this length (clothoid-like), so steering never snaps. */
 const EASE_LENGTH = 10;
 const TURN_ANGLE = Math.PI / 2;
@@ -84,8 +85,8 @@ export function samplePath(s: number, out: PathSample): PathSample {
 /** Residential street geometry, derived from the integrated turn (for the city layout). */
 const turnEnd = samplePath(TURN_START_X + TURN_LENGTH, {} as PathSample);
 export const RESIDENTIAL = {
-  /** Truck drives on the right of a 6 m street heading +Z, so the centre line is +X of it. */
-  axisX: turnEnd.x + 1.5,
+  /** Keeping left on a 6 m street heading +Z puts the truck on the +X side of the centre line. */
+  axisX: turnEnd.x - 1.5,
   /** z where the straight residential section begins. */
   startZ: turnEnd.z,
   width: 6,
@@ -200,7 +201,7 @@ export const SCENE1_END_DISTANCE = driveAt(SCENE1_END_SEC, {} as DriveState).dis
  * Scene 02 key equals Scene 01's last frame exactly.
  */
 export const SCENE1_FOLLOW = {
-  pos: (d: number, out: Vector3) => out.set(d * 0.78 - 15.5, 1.45, 8.2),
+  pos: (d: number, out: Vector3) => out.set(d * 0.78 - 15.5, 1.45, TRUCK_LANE_Z + 6.45),
   target: (d: number, out: Vector3) => out.set(d + 1.5, 1.55, TRUCK_LANE_Z),
 };
 
@@ -220,7 +221,7 @@ export const CITY_SHOTS: CityShot[] = [
   {
     id: 'continue',
     at: D1,
-    pos: [D1 * 0.78 - 15.5 - D1, 1.45, 8.2 - TRUCK_LANE_Z],
+    pos: [D1 * 0.78 - 15.5 - D1, 1.45, 6.45],
     target: [1.5, 1.55, 0],
     focal: 35,
   },
@@ -231,7 +232,8 @@ export const CITY_SHOTS: CityShot[] = [
   { id: 'sideTrack', at: 445, pos: [1.5, 2.2, 15.5], target: [0.5, 1.7, 0], focal: 40 },
   { id: 'approach', at: 540, pos: [-12.5, 3.3, 4.8], target: [10, 1.8, -0.5], focal: 32 },
   // Residential street is 6 m between 1.5 m walls: the camera rides over the carriageway.
-  { id: 'arrive', at: JOURNEY_END, pos: [-15, 5.6, 0.6], target: [16, 1.2, -1.2], focal: 28 },
+  // Truck keeps left, so the street centre is on its right (+local z): look down the middle.
+  { id: 'arrive', at: JOURNEY_END, pos: [-15, 5.6, 0.6], target: [16, 1.2, 1.0], focal: 28 },
 ];
 
 export function createCityCurves() {

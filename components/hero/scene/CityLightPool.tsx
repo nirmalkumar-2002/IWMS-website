@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Object3D, type SpotLight } from 'three';
 import type { CityLamp, SceneRefs } from './handles';
+import { TRUCK_LANE_Z } from './rig';
 
 /** Real-light radius around the truck; beyond FADE_END a pooled light is dark and free to move. */
 const FADE_START = 30;
@@ -26,7 +27,7 @@ export function CityLightPool({ refs, count }: { refs: SceneRefs; count: number 
     const lamps = refs.cityLamps;
     if (!drive || lamps.length === 0) return;
     const px = drive.position.x;
-    const pz = drive.position.z + 1.75;
+    const pz = drive.position.z + TRUCK_LANE_Z;
     const reach = (lamp: CityLamp) => Math.hypot(lamp.x - px, lamp.z - pz);
     const fade = (d: number) => {
       const k = Math.min(1, Math.max(0, (d - FADE_START) / (FADE_END - FADE_START)));

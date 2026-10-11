@@ -12,7 +12,14 @@ import { ACESFilmicToneMapping } from 'three';
 import 'lenis/dist/lenis.css';
 import { CityLightPool } from './scene/CityLightPool';
 import { Director } from './scene/Director';
-import { driveAt, type DriveState } from './scene/route';
+import {
+  RESIDENTIAL,
+  WHEELBASE,
+  driveAt,
+  samplePath,
+  type DriveState,
+  type PathSample,
+} from './scene/route';
 import { createSceneRefs, type SceneRefs } from './scene/handles';
 import { STILL_SHOT, createRig, focalToFov, SHOTS } from './scene/rig';
 import { applyStill, startExperience } from './scene/timeline';
@@ -100,7 +107,7 @@ function AfterMount({
 }
 
 /** `?debug` exposes read-only hooks for QA (Playwright) and manual profiling. */
-function DebugHook({ rig }: { rig: ReturnType<typeof createRig> }) {
+function DebugHook({ rig, refs }: { rig: ReturnType<typeof createRig>; refs: SceneRefs }) {
   const gl = useThree((s) => s.gl);
   const camera = useThree((s) => s.camera);
   const debug = useRef(false);
@@ -116,11 +123,32 @@ function DebugHook({ rig }: { rig: ReturnType<typeof createRig> }) {
     debug.current = true;
     gl.info.autoReset = false;
     const scratch = {} as DriveState;
+    const rear = {} as PathSample;
+    // Front-axle pose from the pure route maths (what the Director applies), yaw from +X toward +Z.
+    const truck = () => {
+      const d = driveAt(rig.driveSec, scratch).distance;
+      samplePath(d - WHEELBASE, rear);
+      return {
+        x: rear.x + Math.cos(rear.yaw) * WHEELBASE,
+        z: rear.z + Math.sin(rear.yaw) * WHEELBASE,
+        yaw: rear.yaw,
+        distance: d,
+      };
+    };
     const target = window as unknown as Record<string, unknown>;
     target.__iwmsHero = {
       rig,
       distance: () => driveAt(rig.driveSec, scratch).distance,
       camera: () => camera.position.toArray(),
+      truck,
+      /** Rendered truck root (world), to cross-check the scene graph against the route. */
+      truckWorld: () => {
+        const drive = refs.drive;
+        if (!drive) return null;
+        const p = drive.getWorldPosition(drive.position.clone());
+        return { x: p.x, z: p.z, yaw: -drive.rotation.y };
+      },
+      geometry: () => ({ residentialAxisX: RESIDENTIAL.axisX }),
       info: () => ({
         calls: frame.current.calls,
         triangles: frame.current.triangles,
@@ -134,7 +162,7 @@ function DebugHook({ rig }: { rig: ReturnType<typeof createRig> }) {
       gl.info.autoReset = true;
       delete target.__iwmsHero;
     };
-  }, [rig, gl, camera]);
+  }, [rig, refs, gl, camera]);
   return null;
 }
 
@@ -224,7 +252,7 @@ export default function Stage({ quality, still, section, onReady, onFail }: Stag
           <Truck refs={refs} />
           <Director rig={rig} refs={refs} still={still} />
           {!still && <CityLightPool refs={refs} count={quality === 'high' ? 3 : 2} />}
-          <DebugHook rig={rig} />
+          <DebugHook rig={rig} refs={refs} />
           {quality === 'high' && <Effects />}
           <ReadySignal
             onReady={() => {
