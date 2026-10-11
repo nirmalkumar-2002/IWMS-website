@@ -33,3 +33,6 @@ dist-ssr
 
 .prerender/
 dist/
+
+# Local Claude Code state (agent worktrees, settings)
+.claude/
