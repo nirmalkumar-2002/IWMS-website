@@ -52,6 +52,17 @@ const MEDIAN = { z0: 0, z1: 1.2, h: 0.3 };
 export interface CityLayout {
   chunks: Chunk[];
   lamps: CityLamp[];
+  /** Residential compound-wall gates (street face), recorded while building zone D. */
+  gates: StreetGate[];
+}
+
+/** A household gate on the residential street: centre of its 3 m opening on the wall face. */
+export interface StreetGate {
+  x: number;
+  z: number;
+  /** +1 = east (+X, the truck's kerbside under left-hand traffic), −1 = west. */
+  side: 1 | -1;
+  plot: number;
 }
 
 /** Distance from (x, z) to the truck's route (main road then residential street). */
@@ -508,7 +519,7 @@ function zoneC(c: Chunk, r: Rng, medium: boolean) {
 }
 
 /* Zone D: residential street ---------------------------------------------------------------- */
-function zoneD(c: Chunk, r: Rng, lamps: CityLamp[]) {
+function zoneD(c: Chunk, r: Rng, lamps: CityLamp[], gates: StreetGate[]) {
   const sides: { sign: -1 | 1; z0: number }[] = [
     { sign: -1, z0: 40 },
     { sign: 1, z0: ROAD.halfW + CORNER_R + 1 },
@@ -543,6 +554,8 @@ function zoneD(c: Chunk, r: Rng, lamps: CityLamp[]) {
       const wallColor = r() < 0.5 ? plasterColor(r) : mix(plasterColor(r), PAL.concrete, 0.4);
       const f = sign < 0 ? face(wallX, z + w, 1, 0) : face(wallX, z, -1, 0);
       const g0 = r.range(0.8, w - 4);
+      // Record the gate centre (no extra RNG draws, so the generated street is unchanged).
+      gates.push({ x: wallX, z: sign > 0 ? z + g0 + 1.5 : z + w - g0 - 1.5, side: sign, plot });
       compoundWall(c, f, w, {
         height: 1.8,
         grille: 0.3,
@@ -738,6 +751,7 @@ function skyline(c: Chunk, r: Rng, medium: boolean) {
 export function buildCity(quality: 'high' | 'medium'): CityLayout {
   const medium = quality === 'medium';
   const lamps: CityLamp[] = [];
+  const gates: StreetGate[] = [];
   // Scene 01's posts carry no real light past x = 32; register them so the pool lights them.
   for (let x = 64; x <= WORLD_POSTS.to; x += WORLD_POSTS.spacing)
     lamps.push({
@@ -759,10 +773,10 @@ export function buildCity(quality: 'high' | 'medium'): CityLayout {
   const cc = new Chunk('C');
   zoneC(cc, rng(404), medium);
   const d = new Chunk('D');
-  zoneD(d, rng(505), lamps);
+  zoneD(d, rng(505), lamps, gates);
   const mid = new Chunk('mid');
   midFill(mid, rng(606), medium);
   const sky = new Chunk('sky');
   skyline(sky, rng(707), medium);
-  return { chunks: [road, a, b, cc, d, mid, sky], lamps };
+  return { chunks: [road, a, b, cc, d, mid, sky], lamps, gates };
 }

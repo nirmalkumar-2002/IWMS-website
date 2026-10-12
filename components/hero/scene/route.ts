@@ -111,21 +111,43 @@ const BRAKE = 0.5;
 const TURN_FRONT = TURN_START_X + WHEELBASE;
 const LEAVE_TURN = TURN_START_X + TURN_LENGTH + WHEELBASE;
 
-function targetSpeed(d: number) {
+/**
+ * Phase 3.1: the household collection point the truck stops at — the east (+X, kerbside under
+ * left-hand traffic) compound-wall gate of residential plot 12, read from the seeded city layout
+ * (`buildCity().gates`; a test keeps the two in sync). The truck stops with its front axle 9.5 m
+ * past the gate so the rear hopper sits just beyond the opening, ready for bins to be loaded.
+ */
+export const COLLECTION_GATE = { x: RESIDENTIAL.axisX + 4.0, z: 142.38 };
+const STOP_FRONT_Z = COLLECTION_GATE.z + 9.5;
+const STOP_BRAKE = 0.25;
+/** Seconds the truck stands still at the collection point at the end of the table. */
+export const STOP_HOLD = 4;
+
+function targetSpeed(d: number, stopTarget: number) {
   if (d < TURN_FRONT)
     return Math.min(
       CRUISE,
       Math.sqrt(TURN_SPEED ** 2 + 2 * BRAKE * Math.max(0, TURN_FRONT - 6 - d)),
     );
   if (d < LEAVE_TURN + 6) return TURN_SPEED;
-  const toEnd = JOURNEY_END - d;
-  return Math.max(
-    ARRIVE_SPEED,
-    Math.min(STREET_SPEED, Math.sqrt(ARRIVE_SPEED ** 2 + 2 * 0.35 * Math.max(0, toEnd - 10))),
-  );
+  if (d < JOURNEY_END) {
+    // Scene 02 (unchanged): roll slowly into the residential street.
+    const toEnd = JOURNEY_END - d;
+    return Math.max(
+      ARRIVE_SPEED,
+      Math.min(STREET_SPEED, Math.sqrt(ARRIVE_SPEED ** 2 + 2 * 0.35 * Math.max(0, toEnd - 10))),
+    );
+  }
+  // Phase 3.1: gentle stop at the collection point (continuous with ARRIVE_SPEED above).
+  return Math.min(ARRIVE_SPEED, Math.sqrt(2 * STOP_BRAKE * Math.max(0, stopTarget - d)));
 }
 
-const kin = (() => {
+/**
+ * Integrates the whole journey. Every step before JOURNEY_END evaluates exactly the same
+ * expressions as Scene 02 always has, so that prefix of the table is bit-identical; the
+ * Phase 3.1 stop and a standstill hold are appended after it.
+ */
+function simulate(stopTarget: number) {
   const time: number[] = [0];
   const distance: number[] = [0];
   const speed: number[] = [0];
@@ -134,34 +156,89 @@ const kin = (() => {
   let v = 0;
   let d = 0;
   let a = 0;
-  while (d < JOURNEY_END && t < 400) {
+  let scene2Index = -1;
+  let scene2Sec = 0;
+  let stopIndex = -1;
+  while (t < 600) {
     t += DT;
     if (t <= DRIVE.seconds + 1e-9) {
       const x = Math.min(1, t / DRIVE.ramp);
       a = DRIVE.accel * x * x * (3 - 2 * x);
     } else {
-      const want = Math.max(-0.6, Math.min(0.6, (targetSpeed(d) - v) * 0.45));
+      const floor = d >= JOURNEY_END ? -0.4 : -0.6;
+      const want = Math.max(floor, Math.min(0.6, (targetSpeed(d, stopTarget) - v) * 0.45));
       // Jerk limit 0.35 m/s³: no lurches when the controller changes its mind.
       a += Math.max(-0.35 * DT, Math.min(0.35 * DT, want - a));
     }
     v = Math.max(0, v + a * DT);
     d += v * DT;
+    if (scene2Index < 0 && d >= JOURNEY_END) {
+      scene2Index = time.length;
+      scene2Sec = t;
+    }
+    if (scene2Index >= 0 && v <= 0.02 && t > scene2Sec + 1) {
+      v = 0;
+      a = 0;
+    }
     time.push(t);
     distance.push(d);
     speed.push(v);
     accel.push(a);
+    if (v === 0 && scene2Index >= 0 && t > scene2Sec + 1) {
+      stopIndex = time.length - 1;
+      break;
+    }
+  }
+  const stopSec = t;
+  for (let i = 0; i < Math.round(STOP_HOLD / DT); i++) {
+    t += DT;
+    time.push(t);
+    distance.push(d);
+    speed.push(0);
+    accel.push(0);
   }
   return {
     distance: Float64Array.from(distance),
     speed: Float64Array.from(speed),
     accel: Float64Array.from(accel),
     seconds: t,
+    scene2Index,
+    scene2Sec,
+    stopIndex,
+    stopSec,
+    stopDistance: d,
   };
+}
+
+/** Front-axle z on the residential straight for a front-axle route distance. */
+const frontZAt = (d: number) => {
+  const p = samplePath(d - WHEELBASE, {} as PathSample);
+  return p.z + Math.sin(p.yaw) * WHEELBASE;
+};
+// The controller settles slightly past its target; correct the target so the truck stops at
+// STOP_FRONT_Z (a few deterministic iterations at module load, < 1 cm error).
+const STOP_DISTANCE_WANTED = JOURNEY_END + (STOP_FRONT_Z - frontZAt(JOURNEY_END));
+const kin = (() => {
+  let target = STOP_DISTANCE_WANTED;
+  let result = simulate(target);
+  for (let i = 0; i < 4; i++) {
+    target += STOP_DISTANCE_WANTED - result.stopDistance;
+    result = simulate(target);
+  }
+  return result;
 })();
 
 /** Simulated seconds at which Scene 01 hands over (truck pulling away) and Scene 02 ends. */
 export const SCENE1_END_SEC = DRIVE.seconds;
-export const JOURNEY_END_SEC = kin.seconds;
+/** End of Scene 02: the first table sample past JOURNEY_END (exactly the pre-3.1 value). */
+export const SCENE2_END_SEC = kin.scene2Sec;
+/** Alias kept for Scene 02 code (timeline city drive). */
+export const JOURNEY_END_SEC = SCENE2_END_SEC;
+/** Phase 3.1: when the truck comes to rest, and the end of the standstill hold. */
+export const STOP_SEC = kin.stopSec;
+export const COLLECT_END_SEC = kin.seconds;
+/** Front-axle route distance where the truck stands at the collection point. */
+export const STOP_DISTANCE = kin.stopDistance;
 
 export interface DriveState {
   distance: number;
@@ -171,7 +248,9 @@ export interface DriveState {
 
 export function driveAt(sec: number, out: DriveState): DriveState {
   const f = Math.max(0, Math.min(sec, kin.seconds)) / DT;
-  const i = Math.min(kin.distance.length - 2, Math.floor(f));
+  let i = Math.min(kin.distance.length - 2, Math.floor(f));
+  // At/below Scene 02's end, bracket exactly as the pre-3.1 table did (its last pair).
+  if (sec <= SCENE2_END_SEC) i = Math.min(kin.scene2Index - 1, i);
   const k = f - i;
   out.distance = kin.distance[i] + (kin.distance[i + 1] - kin.distance[i]) * k;
   out.speed = kin.speed[i] + (kin.speed[i + 1] - kin.speed[i]) * k;
