@@ -2,10 +2,13 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
 import { SHOTS, shotU, type Rig } from './rig';
+import { COLLECT_SHOTS } from './collection';
 import {
   CITY_SHOTS,
+  COLLECT_END_SEC,
   JOURNEY_END_SEC,
   SCENE1_END_SEC,
+  STOP_SEC,
   secondsAtDistance,
 } from './route';
 
@@ -85,7 +88,19 @@ export function buildReveal(rig: Rig, copy: CopyElements) {
   let at = 0.35;
   tl.set(
     rig,
-    { camU: 0, focal: SHOTS[0].focal, follow: 0, driveSec: 0, cityU: 0, dawn: 0 },
+    {
+      camU: 0,
+      focal: SHOTS[0].focal,
+      follow: 0,
+      driveSec: 0,
+      cityU: 0,
+      dawn: 0,
+      collectU: 0,
+      pin: 0,
+      gps: 0,
+      route: 0,
+      net: 0,
+    },
     0,
   );
   for (let i = 1; i < SHOTS.length; i++) {
@@ -126,6 +141,7 @@ export function buildReveal(rig: Rig, copy: CopyElements) {
     .to(all, { opacity: 0, duration: 0.6, ease: 'power1.in' }, 'drive+=1.7');
 
   addCityEntry(tl, rig, copy, at + SCENE1_DRIVE);
+  addCollection(tl, rig, at + SCENE1_DRIVE + CITY_UNITS);
   tl.to({}, { duration: 0.4 });
   return tl;
 }
@@ -218,6 +234,80 @@ function addCityEntry(
     { opacity: 0, duration: 0.5, ease: 'power1.in' },
     shown + (side - shown) * 0.3,
   );
+}
+
+/** Scroll units for Phase 3.1 (≈50vh each, like the rest of the timeline). */
+const COLLECT_UNITS = 9;
+/**
+ * Scene 02 ends with cityEase'(1) = 1, i.e. CITY_SPAN / CITY_UNITS simulated seconds per scroll
+ * unit. Phase 3.1 keeps exactly that rate, so the truck's on-screen speed is continuous across
+ * the hand-over and the deceleration in the kinematics table is what the visitor sees.
+ */
+const COLLECT_DRIVE = (COLLECT_END_SEC - JOURNEY_END_SEC) / (CITY_SPAN / CITY_UNITS);
+const COLLECT_STOP = (STOP_SEC - JOURNEY_END_SEC) / (CITY_SPAN / CITY_UNITS);
+
+/**
+ * Phase 3.1 — smart collection & digital connectivity, on the same timeline after `city:arrive`.
+ * Owns: driveSec (continued), collectU, focal, and the digital layer (pin, gps, route, net).
+ * The story beats: physical collection (truck stops at the household gate, marker) → GPS
+ * tracking (vehicle tag) → connected collection points (camera rises, route draws) → IWMS
+ * monitoring (platform link + monitor panel). Every value is scrubbed, never time-based.
+ */
+function addCollection(tl: gsap.core.Timeline, rig: Rig, start: number) {
+  const k = (id: string) => COLLECT_SHOTS.find((s) => s.id === id)!;
+  const kerbAt = start + Math.min(COLLECT_STOP + 0.2, 3.3);
+  const rise = start + 4.4;
+  tl.addLabel('collect', start)
+    .fromTo(
+      rig,
+      { driveSec: JOURNEY_END_SEC },
+      { driveSec: COLLECT_END_SEC, duration: COLLECT_DRIVE, ease: 'none', immediateRender: false },
+      start,
+    )
+    .addLabel('collect:stop', start + COLLECT_STOP)
+    // Camera: settle behind the truck as it rolls to the gate, then rise to the systems view.
+    .fromTo(
+      rig,
+      { collectU: 0, focal: k('arrive').focal },
+      {
+        collectU: 0.5,
+        focal: k('kerb').focal,
+        duration: kerbAt - start,
+        ease: 'sine.inOut',
+        immediateRender: false,
+      },
+      start,
+    )
+    .addLabel('collect:network', rise)
+    .fromTo(
+      rig,
+      { collectU: 0.5, focal: k('kerb').focal },
+      {
+        collectU: 1,
+        focal: k('network').focal,
+        duration: 2.4,
+        ease: 'sine.inOut',
+        immediateRender: false,
+      },
+      rise,
+    );
+  // Digital layer: identify the gate as the truck creeps up to it, then the vehicle's GPS fix,
+  // then the route and nearby points as the view opens, then the link into IWMS.
+  const reveal = (key: 'pin' | 'gps' | 'route' | 'net', at: number, duration: number) =>
+    tl.fromTo(
+      rig,
+      { [key]: 0 },
+      { [key]: 1, duration, ease: 'power1.inOut', immediateRender: false },
+      at,
+    );
+  // Both land while the truck is still creeping in, so the GPS tag reads its last km/h, then stops.
+  reveal('pin', start + COLLECT_STOP - 1.5, 0.9);
+  reveal('gps', start + COLLECT_STOP - 0.7, 0.8);
+  reveal('route', rise + 1.2, 1.8);
+  reveal('net', rise + 2.8, 1.2);
+  // Hold the finished frame for the remaining units, ready for Phase 3.2.
+  tl.addLabel('collect:end', start + COLLECT_UNITS);
+  tl.to({}, { duration: 0.01 }, start + COLLECT_UNITS - 0.01);
 }
 
 /**

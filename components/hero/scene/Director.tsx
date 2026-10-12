@@ -1,6 +1,7 @@
 import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { FogExp2, MathUtils, Vector3, type PerspectiveCamera } from 'three';
+import { createCollectCurves } from './collection';
 import type { SceneRefs } from './handles';
 import {
   APPROACH_POS,
@@ -85,6 +86,7 @@ export function Director({
 }) {
   const curves = useMemo(createCameraCurves, []);
   const cityCurves = useMemo(createCityCurves, []);
+  const collectCurves = useMemo(createCollectCurves, []);
   const scratch = useMemo(
     () => ({
       pos: new Vector3(),
@@ -174,8 +176,14 @@ export function Director({
       cf.oz = tf.oz;
       cf.hx = Math.cos(lag.yaw);
       cf.hz = Math.sin(lag.yaw);
-      cityCurves.pos.getPoint(rig.cityU, s.wantPos);
-      cityCurves.target.getPoint(rig.cityU, s.wantTarget);
+      // Phase 3.1 continues on its own spline, whose first key is Scene 02's last (`arrive`).
+      if (rig.collectU > 0) {
+        collectCurves.pos.getPoint(rig.collectU, s.wantPos);
+        collectCurves.target.getPoint(rig.collectU, s.wantTarget);
+      } else {
+        cityCurves.pos.getPoint(rig.cityU, s.wantPos);
+        cityCurves.target.getPoint(rig.cityU, s.wantTarget);
+      }
       if (!inCity.current || !settled.current) {
         if (settled.current) {
           // Hand-over: continue from wherever the camera actually is (no pop on fast scrolls).

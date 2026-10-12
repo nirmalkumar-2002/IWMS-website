@@ -4,9 +4,10 @@
   height: 100vh;
   background: var(--night-950);
 }
-/* Scene 01 (≈600vh of scroll) + Scene 02 city entry (≈700vh) on one timeline. */
+/* Scene 01 (≈600vh of scroll) + Scene 02 city entry (≈700vh) + Phase 3.1 collection (≈450vh)
+   on one timeline (≈50vh per timeline unit). */
 .hero--cinematic {
-  height: 1400vh;
+  height: 1850vh;
 }
 .hero__stage {
   position: sticky;
@@ -124,11 +125,340 @@
     top: auto;
     bottom: 11vh;
   }
-  .hero__proxy-note {
-    top: 1rem;
-    bottom: auto;
-    left: 1rem;
-    font-size: 0.6rem;
+}
+
+/* Phase 3.1 digital layer: world-anchored markers + IWMS monitor. Positions/opacity are written
+   per frame by CollectionDirector; nothing here animates on a clock except two ambient pulses. */
+.hero__collect {
+  --signal: #a6dcc8;
+  --signal-dim: rgba(166, 220, 200, 0.42);
+  --point: var(--amber);
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  font-family: var(--font-sans), 'Segoe UI', system-ui, sans-serif;
+  color: var(--text-light);
+}
+.hero__collect-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.hero__route-line,
+.hero__route-glow {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.hero__route-line {
+  stroke: var(--signal);
+  stroke-width: 2;
+}
+.hero__route-glow {
+  stroke: rgba(166, 220, 200, 0.16);
+  stroke-width: 9;
+}
+.hero__route-done {
+  fill: none;
+  stroke: var(--signal-dim);
+  stroke-width: 1.5;
+  stroke-dasharray: 2 5;
+}
+.hero__route-head {
+  fill: var(--signal);
+  stroke: rgba(10, 15, 28, 0.6);
+  stroke-width: 1;
+}
+.hero__collect-ring {
+  fill: rgba(10, 15, 28, 0.35);
+  stroke: var(--signal);
+  stroke-width: 1.5;
+}
+[data-status='current'] > .hero__collect-ring {
+  stroke: var(--point);
+  fill: rgba(255, 165, 38, 0.18);
+}
+[data-status='collected'] > .hero__collect-ring {
+  stroke: var(--signal-dim);
+}
+.hero__collect-stem,
+.hero__gps-stem {
+  stroke: rgba(232, 237, 245, 0.55);
+  stroke-width: 1;
+}
+[data-status='current'] > .hero__collect-stem {
+  stroke: rgba(255, 165, 38, 0.8);
+}
+.hero__link {
+  fill: none;
+  stroke: var(--signal);
+  stroke-width: 1.25;
+  stroke-dasharray: 2 6;
+  animation: hero-link-flow 1.6s linear infinite paused;
+}
+/* Ambient loops run only while the layer is live (never during Scenes 01–02). */
+.hero__collect[data-live='true'] .hero__link,
+.hero__collect[data-live='true'] .hero__gps-live {
+  animation-play-state: running;
+}
+@keyframes hero-link-flow {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+
+/* World-anchored labels: the element sits on its anchor's head point (0×0 box); children are
+   stacked upward from it and centred, so the anchor is the bottom-centre of the label. */
+.hero__collect-marker,
+.hero__gps {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+.hero__collect-marker > span,
+.hero__gps > span {
+  position: absolute;
+  left: 0;
+  bottom: 6px;
+  translate: -50% 0;
+  white-space: nowrap;
+}
+.hero__collect-code,
+.hero__gps-head {
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--signal-dim);
+  border-radius: 3px;
+  background: rgba(10, 15, 28, 0.64);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+}
+.hero__collect-marker[data-status='current'] .hero__collect-code {
+  border-color: rgba(255, 165, 38, 0.75);
+  color: #ffd9a0;
+  font-size: 0.74rem;
+}
+.hero__collect-kind,
+.hero__gps-fix,
+.hero__gps-speed {
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
+}
+.hero__collect-marker > .hero__collect-kind {
+  bottom: calc(6px + 1.75rem);
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.hero__collect-marker[data-status='current'] .hero__collect-kind {
+  color: #ffd9a0;
+}
+.hero__gps > .hero__gps-head {
+  bottom: calc(6px + 2.3rem);
+}
+.hero__gps > .hero__gps-fix {
+  bottom: calc(6px + 1.15rem);
+  font-size: 0.64rem;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+.hero__gps-speed {
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--signal);
+}
+.hero__gps-live {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 0.4rem;
+  border-radius: 50%;
+  background: var(--signal);
+  vertical-align: 0.08em;
+  animation: hero-live 2.4s ease-in-out infinite paused;
+}
+@keyframes hero-live {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Story steps, top-left like the other scene copy. */
+.hero__collect-copy {
+  position: absolute;
+  top: 12vh;
+  left: 8vw;
+  max-width: min(36vw, 30rem);
+  opacity: 0;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.45);
+}
+.hero__collect-eyebrow {
+  margin: 0 0 0.6rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--signal);
+}
+.hero__collect-title {
+  margin: 0;
+  font-family: var(--font-display), 'Segoe UI', system-ui, sans-serif;
+  font-weight: 600;
+  font-size: clamp(1.25rem, 2vw, 2.1rem);
+  line-height: 1.22;
+  letter-spacing: 0.02em;
+}
+.hero__collect-steps {
+  display: grid;
+  gap: 0.45rem;
+  margin: 1.3rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: clamp(0.78rem, 0.9vw, 0.92rem);
+}
+.hero__collect-steps li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  color: rgba(232, 237, 245, 0.42);
+  transition: color 0.4s ease;
+}
+.hero__collect-step-n {
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  font-variant-numeric: tabular-nums;
+}
+.hero__collect-steps li[data-state='done'] {
+  color: var(--text-muted);
+}
+.hero__collect-steps li[data-state='active'] {
+  color: var(--text-light);
+}
+.hero__collect-steps li[data-state='active'] .hero__collect-step-n {
+  color: var(--signal);
+}
+
+/* IWMS monitor: a quiet glass card, clearly labelled as demo data. */
+.hero__monitor {
+  position: absolute;
+  top: 14vh;
+  right: 4vw;
+  width: min(19rem, 30vw);
+  padding: 0.95rem 1.05rem 1rem;
+  border: 1px solid rgba(232, 237, 245, 0.14);
+  border-radius: 8px;
+  background: rgba(10, 15, 28, 0.66);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  will-change: transform, opacity;
+}
+.hero__monitor-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid rgba(232, 237, 245, 0.1);
+}
+.hero__monitor-title {
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.hero__monitor-demo {
+  padding: 0.1rem 0.38rem;
+  border: 1px dashed rgba(255, 165, 38, 0.55);
+  border-radius: 3px;
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ffc77a;
+}
+.hero__monitor-rows {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0.75rem 0 0;
+  font-size: 0.78rem;
+}
+.hero__monitor-rows > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.hero__monitor-rows dt {
+  color: var(--text-muted);
+}
+.hero__monitor-rows dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.hero__monitor-rows em {
+  margin-left: 0.35rem;
+  font-style: normal;
+  color: var(--signal);
+}
+.hero__monitor-rows em.hero__monitor-arrived {
+  color: #ffd9a0;
+}
+.hero__monitor-bar {
+  display: block;
+  width: 7.5rem;
+  height: 2px;
+  margin: 0.35rem 0 0 auto;
+  background: rgba(232, 237, 245, 0.12);
+}
+.hero__monitor-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--signal);
+  transform-origin: left center;
+}
+
+/* Portrait: steps up top, monitor across the bottom (links attach to its top edge). */
+@media (max-aspect-ratio: 4/5) {
+  .hero__collect-copy {
+    top: 4.8rem;
+    left: 6vw;
+    right: 6vw;
+    max-width: none;
+  }
+  .hero__collect-steps {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.3rem 1rem;
+    margin-top: 0.8rem;
+  }
+  .hero__monitor {
+    top: auto;
+    bottom: 4.5rem;
+    left: 6vw;
+    right: 6vw;
+    width: auto;
+  }
+  /* The stage is 100lvh: stay above the browser toolbar while it is showing. */
+  @supports (height: 100svh) {
+    .hero__monitor {
+      bottom: calc(4.5rem + 100lvh - 100svh);
+    }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero__link,
+  .hero__gps-live {
+    animation: none;
   }
 }
 
@@ -167,4 +497,14 @@
   font-size: 0.7rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+/* Portrait: top-left. Must follow the base rule, or its `bottom` wins and the badge stretches
+   to the full stage height. */
+@media (max-aspect-ratio: 4/5) {
+  .hero__proxy-note {
+    top: 1rem;
+    bottom: auto;
+    left: 1rem;
+    font-size: 0.6rem;
+  }
 }

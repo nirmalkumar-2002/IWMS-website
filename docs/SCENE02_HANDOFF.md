@@ -1,5 +1,7 @@
 # Scene 02 → Scene 03 handoff
 
+> **Phase 3.1 is now connected** (see `docs/SCENE03_HANDOFF.md`). The state below is no longer the end of the scroll: it is the timeline label `city:arrive`, where Phase 3.1 takes over. Scene 02 itself is unchanged; its part of the kinematics table is bit-identical.
+
 Scene 02 (city entry) ends with the truck rolling slowly into the residential street. Phase 3 (household collection) must start from this state. Values come from `components/hero/scene/route.ts` (after the Phase 2.1 left-hand-traffic correction) and can be reproduced with `?debug` (`window.__iwmsHero`).
 
 ## Final state at the end of the scroll (timeline label `city:arrive`)

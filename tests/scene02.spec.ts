@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { SCENE2_END_SEC } from '../components/hero/scene/route';
 
 /**
  * Scene 02 (city entry) QA. Runs on the real-GPU project with `?debug`, which exposes
@@ -81,9 +82,22 @@ async function scrollToY(page: Page, y: number) {
   await page.evaluate((top) => window.scrollTo(0, top), Math.round(y));
 }
 
-async function scrollToFrac(page: Page, frac: number) {
-  const max = await maxScroll(page);
-  await scrollToY(page, frac * max);
+/**
+ * Smallest scroll y where Scene 02 has finished (driveSec reached SCENE2_END_SEC). Phase 3.1
+ * continues the timeline past this point, so "Scene 02 fractions" are taken relative to it
+ * rather than to the bottom of the page (which used to coincide with Scene 02's end).
+ */
+async function findScene02End(page: Page) {
+  let lo = 0;
+  let hi = await maxScroll(page);
+  while (hi - lo > 1) {
+    const mid = Math.floor((lo + hi) / 2);
+    await scrollToY(page, mid);
+    const { driveSec } = await settle(page);
+    if (driveSec >= SCENE2_END_SEC - 1e-6) hi = mid;
+    else lo = mid;
+  }
+  return hi;
 }
 
 async function openCinematic(page: Page) {
@@ -131,6 +145,9 @@ test.describe('Scene 02 city entry', () => {
     const w = watch(page);
     await openCinematic(page);
     const max = await maxScroll(page);
+    // Same step as before Phase 3.1: 0.2 % of Scene 01 + 02's scroll length. Measured first, so
+    // the boundary search and sampling below run exactly as they did before Phase 3.1.
+    const step = (await findScene02End(page)) * 0.002;
 
     // Binary-search the scroll position where the truck reaches the hand-over distance.
     let lo = 0;
@@ -143,7 +160,6 @@ test.describe('Scene 02 city entry', () => {
       else hi = mid;
     }
     const boundary = hi;
-    const step = max * 0.002;
     const samples: Array<{ y: number } & Snapshot> = [];
     for (let i = -12; i <= 16; i++) {
       const y = boundary + i * step;
@@ -171,15 +187,19 @@ test.describe('Scene 02 city entry', () => {
   }) => {
     const w = watch(page);
     await openCinematic(page);
+    const max = await maxScroll(page);
+    // Fractions of Scene 01 + 02's scroll (the page now continues into Phase 3.1).
+    const yEnd = await findScene02End(page);
+    const scrollToFrac = (frac: number) => scrollToY(page, frac * yEnd);
     const recorded: Record<number, Snapshot> = {};
     for (const frac of [0.55, 0.75, 0.9]) {
-      await scrollToFrac(page, Math.min(1, frac + 0.08));
+      await scrollToFrac(Math.min(1, frac + 0.08));
       await settle(page);
-      await scrollToFrac(page, frac);
+      await scrollToFrac(frac);
       const fromAbove = await settle(page);
-      await scrollToFrac(page, frac - 0.08);
+      await scrollToFrac(frac - 0.08);
       await settle(page);
-      await scrollToFrac(page, frac);
+      await scrollToFrac(frac);
       const fromBelow = await settle(page);
       const detail = `frac ${frac}: above ${JSON.stringify(fromAbove)} below ${JSON.stringify(fromBelow)}`;
       expect(Math.abs(fromAbove.distance - fromBelow.distance), detail).toBeLessThanOrEqual(0.05);
@@ -188,19 +208,19 @@ test.describe('Scene 02 city entry', () => {
       recorded[frac] = fromBelow;
     }
 
-    // Rapid scroll: no settling between jumps.
+    // Rapid scroll: no settling between jumps (still swinging over the whole page).
     for (let i = 0; i < 4; i++) {
-      for (const frac of [1, 0, 0.7]) {
-        await scrollToFrac(page, frac);
+      for (const y of [max, 0, 0.7 * yEnd]) {
+        await scrollToY(page, y);
         await page.waitForTimeout(40);
       }
     }
-    await scrollToFrac(page, 0.7);
+    await scrollToFrac(0.7);
     const afterRapid = await settle(page);
     // Fresh reference for 0.7 (approached from above/below in the deterministic pass above).
-    await scrollToFrac(page, 0.6);
+    await scrollToFrac(0.6);
     await settle(page);
-    await scrollToFrac(page, 0.7);
+    await scrollToFrac(0.7);
     const reference = await settle(page);
     expect(
       Math.abs(afterRapid.distance - reference.distance),
@@ -218,7 +238,8 @@ test.describe('Scene 02 city entry', () => {
     const max = await maxScroll(page);
     expect(await opacities(page, '.hero__city-line')).toEqual([0, 0]);
 
-    // cityU is non-decreasing in scroll: binary-search for cityU ≈ 0.5 (establish).
+    // cityU is non-decreasing in scroll: binary-search for cityU just past 0.5 (establish). The
+    // second line finishes fading in exactly at establish, so the window starts there.
     let lo = 0;
     let hi = max;
     let found: Snapshot | null = null;
@@ -226,14 +247,14 @@ test.describe('Scene 02 city entry', () => {
       const mid = (lo + hi) / 2;
       await scrollToY(page, mid);
       const s = await settle(page);
-      if (s.cityU >= 0.48 && s.cityU <= 0.52) {
+      if (s.cityU >= 0.5 && s.cityU <= 0.52) {
         found = s;
         break;
       }
-      if (s.cityU < 0.48) lo = mid;
+      if (s.cityU < 0.5) lo = mid;
       else hi = mid;
     }
-    expect(found, 'could not find a scroll position with cityU in [0.48, 0.52]').not.toBeNull();
+    expect(found, 'could not find a scroll position with cityU in [0.5, 0.52]').not.toBeNull();
     const y = await page.evaluate(() => window.scrollY);
     await expect
       .poll(() => opacities(page, '.hero__city-line'), {
@@ -242,12 +263,15 @@ test.describe('Scene 02 city entry', () => {
       })
       .toEqual([1, 1]);
 
-    await scrollToFrac(page, 1);
-    await settle(page);
-    await expect
-      .poll(() => opacities(page, '.hero__city-line'), { timeout: 3_000 })
-      .toEqual([0, 0]);
-    await scrollToFrac(page, 0);
+    // Cleared by the end of Scene 02 and stays clear through Phase 3.1 to the bottom.
+    for (const end of [await findScene02End(page), max]) {
+      await scrollToY(page, end);
+      await settle(page);
+      await expect
+        .poll(() => opacities(page, '.hero__city-line'), { timeout: 3_000 })
+        .toEqual([0, 0]);
+    }
+    await scrollToY(page, 0);
     await settle(page);
     await expect
       .poll(() => opacities(page, '.hero__city-line'), { timeout: 3_000 })
@@ -262,15 +286,20 @@ test.describe('Scene 02 city entry', () => {
       page.evaluate(
         () => (window as unknown as { __iwmsHero: HeroDebug }).__iwmsHero.info().programs,
       );
+    // Fractions of Scene 01 + 02's scroll; Phase 3.1 (past yEnd) is covered by collection.spec.
+    const yEnd = await findScene02End(page);
+    // Reload so the search above (which scrolls into Phase 3.1) cannot pre-warm late programs.
+    await openCinematic(page);
+    const scrollToFrac = (frac: number) => scrollToY(page, frac * yEnd);
     // Walk to mid-Scene 02 so everything the city needs has been drawn at least once.
     for (let f = 0; f <= 0.75; f += 0.05) {
-      await scrollToFrac(page, f);
+      await scrollToFrac(f);
       await settle(page);
     }
     await page.waitForTimeout(2_000);
     const mid = await programs();
     for (let f = 0.75; f <= 1.0001; f += 0.025) {
-      await scrollToFrac(page, f);
+      await scrollToFrac(f);
       await settle(page);
     }
     await page.waitForTimeout(1_000);

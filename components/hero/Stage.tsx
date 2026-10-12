@@ -3,6 +3,7 @@ import { Canvas, useFrame, useThree, type RootState } from '@react-three/fiber';
 import {
   HalfFloatType,
   UnsignedByteType,
+  Vector3,
   WebGLRenderTarget,
   type Group,
   type Object3D,
@@ -11,11 +12,22 @@ import { useProgress } from '@react-three/drei';
 import { ACESFilmicToneMapping } from 'three';
 import 'lenis/dist/lenis.css';
 import { CityLightPool } from './scene/CityLightPool';
+import {
+  CollectionDirector,
+  CollectionHudView,
+  createCollectionHud,
+  type CollectionHud,
+} from './scene/CollectionOverlay';
 import { Director } from './scene/Director';
 import { SunDirector } from './scene/SunDirector';
 import { sunAt } from './scene/sun';
 import {
+  COLLECT_END_SEC,
+  COLLECTION_GATE,
   RESIDENTIAL,
+  SCENE2_END_SEC,
+  STOP_DISTANCE,
+  STOP_SEC,
   WHEELBASE,
   driveAt,
   samplePath,
@@ -111,7 +123,15 @@ function AfterMount({
 }
 
 /** `?debug` exposes read-only hooks for QA (Playwright) and manual profiling. */
-function DebugHook({ rig, refs }: { rig: ReturnType<typeof createRig>; refs: SceneRefs }) {
+function DebugHook({
+  rig,
+  refs,
+  hud,
+}: {
+  rig: ReturnType<typeof createRig>;
+  refs: SceneRefs;
+  hud: CollectionHud;
+}) {
   const gl = useThree((s) => s.gl);
   const camera = useThree((s) => s.camera);
   const debug = useRef(false);
@@ -167,6 +187,40 @@ function DebugHook({ rig, refs }: { rig: ReturnType<typeof createRig>; refs: Sce
           lampHeads: refs.day.lampHeads.map((l) => l.material.emissiveIntensity),
         };
       },
+      /** Phase 3.1: collection stop, digital-layer progress, and overlay anchors vs projection. */
+      collection: () => {
+        const wheel = refs.truck?.wheels[0];
+        const size = gl.domElement.getBoundingClientRect();
+        camera.updateMatrixWorld();
+        const v = new Vector3();
+        return {
+          collectU: rig.collectU,
+          pin: rig.pin,
+          gps: rig.gps,
+          route: rig.route,
+          net: rig.net,
+          stopDistance: STOP_DISTANCE,
+          stopSec: STOP_SEC,
+          collectEndSec: COLLECT_END_SEC,
+          scene2EndSec: SCENE2_END_SEC,
+          gate: { x: COLLECTION_GATE.x, z: COLLECTION_GATE.z },
+          wheel: wheel ? { spin: wheel.node.rotation.z, radius: wheel.radius } : null,
+          anchors: hud.anchors().map(({ id, world }) => {
+            v.set(...world).applyMatrix4(camera.matrixWorldInverse);
+            const visible = v.z < -camera.near;
+            v.applyMatrix4(camera.projectionMatrix);
+            return {
+              id,
+              expected: {
+                x: (v.x * 0.5 + 0.5) * size.width,
+                y: (-v.y * 0.5 + 0.5) * size.height,
+                visible,
+              },
+              rendered: hud.rendered[id] ?? { x: NaN, y: NaN, opacity: 0 },
+            };
+          }),
+        };
+      },
       info: () => ({
         calls: frame.current.calls,
         triangles: frame.current.triangles,
@@ -180,7 +234,7 @@ function DebugHook({ rig, refs }: { rig: ReturnType<typeof createRig>; refs: Sce
       gl.info.autoReset = true;
       delete target.__iwmsHero;
     };
-  }, [rig, refs, gl, camera]);
+  }, [rig, refs, hud, gl, camera]);
   return null;
 }
 
@@ -233,6 +287,7 @@ export default function Stage({ quality, still, section, onReady, onFail }: Stag
     return initial;
   });
   const [refs] = useState(createSceneRefs);
+  const [hud] = useState(createCollectionHud);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -274,7 +329,8 @@ export default function Stage({ quality, still, section, onReady, onFail }: Stag
           <Director rig={rig} refs={refs} still={still} />
           <SunDirector rig={rig} refs={refs} still={still} sunShadows={sunShadows} />
           {!still && <CityLightPool refs={refs} count={quality === 'high' ? 3 : 2} />}
-          <DebugHook rig={rig} refs={refs} />
+          {!still && <CollectionDirector rig={rig} hud={hud} />}
+          <DebugHook rig={rig} refs={refs} hud={hud} />
           {quality === 'high' && <Effects />}
           <ReadySignal
             onReady={() => {
@@ -285,6 +341,7 @@ export default function Stage({ quality, still, section, onReady, onFail }: Stag
         </Suspense>
         {ready && !still && <CityMount quality={quality} refs={refs} />}
       </Canvas>
+      {!still && <CollectionHudView hud={hud} />}
       <LoadingLine />
       {!__TRUCK_MODEL__ && (
         <p className="hero__proxy-note">

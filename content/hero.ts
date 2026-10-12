@@ -1,4 +1,4 @@
-/** Approved hero copy. Phase 1 uses only these two strings. */
+/** Hero copy. `title` and `subtitle` are approved; later scene blocks are marked where proposed. */
 export const heroContent = {
   title: 'INTEGRATED WASTE MANAGEMENT SUITE',
   subtitle: 'A unified digital platform for waste management.',
@@ -9,5 +9,32 @@ export const heroContent = {
   city: {
     title: 'Smart Collection. Connected Cities.',
     subtitle: 'GPS-enabled fleet tracking and optimized collection routes.',
+  },
+  /**
+   * Phase 3.1 copy (smart collection & digital connectivity). PROPOSED — not yet approved.
+   * The overlay's operational values are illustrative demo data and are labelled as such.
+   */
+  collect: {
+    eyebrow: 'Smart collection',
+    title: 'Every household on the route, connected.',
+    steps: [
+      'Physical collection',
+      'GPS tracking',
+      'Connected collection points',
+      'IWMS monitoring',
+    ],
+    point: { current: 'Collection point', scheduled: 'Scheduled', collected: 'Collected' },
+    gps: { label: 'GPS', moving: 'km/h', stopped: 'Stopped at collection point' },
+    monitor: {
+      title: 'IWMS · Route monitor',
+      demo: 'Illustrative demo data',
+      vehicle: 'Vehicle',
+      vehicleState: 'GPS locked',
+      route: 'Route',
+      stop: 'Collection point',
+      stopState: 'Arrived',
+      progress: 'Households served',
+      next: 'Next point',
+    },
   },
 } as const;

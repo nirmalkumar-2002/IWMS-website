@@ -15,8 +15,8 @@ const KNOTS: [number, number][] = [
   [330, 0.4], // first warm light (establishing shot)
   [455, 0.62], // sun at the horizon (city entrance / side track)
   [620, 0.9], // sun clears the skyline (approach, turn)
-  // Golden morning on the residential street; reached 1 m before the journey ends so the
-  // final scroll position is exactly 1 (the truck stops ~0.01 m short of JOURNEY_END).
+  // Golden morning on the residential street; reached 1 m before Scene 02's end so that end is
+  // exactly 1 (it samples ~0.01 m short of JOURNEY_END). Phase 3.1 (≈720 m) stays at 1.
   [JOURNEY_END - 1, 1],
 ];
 const slopes = (() => {

@@ -150,7 +150,8 @@ test.describe('cinematic', () => {
     const sectionHeight = await hero.evaluate(
       (el) => el.getBoundingClientRect().height,
     );
-    expect(Math.abs(sectionHeight - viewport * 14)).toBeLessThanOrEqual(4);
+    // Scene 01 + Scene 02 (1400vh) + Phase 3.1 collection (450vh) = 1850vh.
+    expect(Math.abs(sectionHeight - viewport * 18.5)).toBeLessThanOrEqual(4);
 
     // Intro (~9.5 s) reveals the title by ~8 s; allow margin.
     await page.waitForTimeout(11_000);
@@ -158,7 +159,8 @@ test.describe('cinematic', () => {
       .poll(() => opacities(page, '.hero__word'), { timeout: 5_000 })
       .toEqual(Array(TITLE_WORDS.length).fill(1));
 
-    // Scroll to the bottom (end of Scene 02): Scene 01 copy and the city copy are both clear.
+    // Scroll to the bottom (end of Phase 3.1, past Scene 02): Scene 01 copy and the city copy
+    // are both clear.
     await page.evaluate(() =>
       window.scrollTo(0, document.documentElement.scrollHeight),
     );

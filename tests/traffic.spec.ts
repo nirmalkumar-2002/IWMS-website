@@ -1,4 +1,9 @@
 import { test, expect, type Page } from '@playwright/test';
+import {
+  SCENE2_END_SEC,
+  driveAt,
+  type DriveState,
+} from '../components/hero/scene/route';
 
 /**
  * Indian LEFT-hand traffic QA (Phase 2.1). Runs on the real-GPU project with `?debug`, which
@@ -185,11 +190,14 @@ test.describe('Left-hand traffic', () => {
     await expect
       .poll(async () => (await state(page)).truck.distance, { timeout: 30_000 })
       .toBeGreaterThan(680);
-    const final = await settle(page);
+    await settle(page);
+    // Trace up to Scene 02's end (the bottom of the page used to be Scene 02's end; Phase 3.1
+    // now continues the drive to the collection stop, which collection.spec covers).
+    const scene2EndDistance = driveAt(SCENE2_END_SEC, {} as DriveState).distance;
     const yStart = await findY(page, (s) => s.truck.x >= 540, 0, max);
     const yEnd = await findY(
       page,
-      (s) => s.truck.distance >= final.truck.distance - 1e-3,
+      (s) => s.truck.distance >= scene2EndDistance - 1e-3,
       yStart,
       max,
     );
