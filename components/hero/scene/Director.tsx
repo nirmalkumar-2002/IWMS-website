@@ -79,10 +79,16 @@ export function Director({
   rig,
   refs,
   still,
+  steady = false,
 }: {
   rig: Rig;
   refs: SceneRefs;
   still: boolean;
+  /**
+   * QA only (`?debug&testcam`): no hand-held float and no camera damping, so the camera is an
+   * exact function of the rig on every frame. Never set in production.
+   */
+  steady?: boolean;
 }) {
   const curves = useMemo(createCameraCurves, []);
   const cityCurves = useMemo(createCityCurves, []);
@@ -157,9 +163,9 @@ export function Director({
       SCENE1_FOLLOW.target(drive.distance, s.followTarget);
       s.pos.lerp(s.followPos, rig.follow);
       s.target.lerp(s.followTarget, rig.follow);
-      if (!still) addHandheld(s.pos, t);
+      if (!still && !steady) addHandheld(s.pos, t);
 
-      if (!settled.current || still) {
+      if (!settled.current || still || steady) {
         camera.position.copy(s.pos);
         s.look.copy(s.target);
         settled.current = true;
@@ -196,11 +202,16 @@ export function Director({
         inCity.current = true;
         settled.current = true;
       }
-      damp3(s.localPos, s.wantPos, 3.2, dt);
-      damp3(s.localTarget, s.wantTarget, 4, dt);
+      if (steady) {
+        s.localPos.copy(s.wantPos);
+        s.localTarget.copy(s.wantTarget);
+      } else {
+        damp3(s.localPos, s.wantPos, 3.2, dt);
+        damp3(s.localTarget, s.wantTarget, 4, dt);
+      }
       toWorld(cf, s.localPos, camera.position);
       toWorld(cf, s.localTarget, s.look);
-      addHandheld(camera.position, t);
+      if (!steady) addHandheld(camera.position, t);
     }
     camera.up.set(0, 1, 0);
     camera.lookAt(s.look);

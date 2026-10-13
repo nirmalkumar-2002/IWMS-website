@@ -78,8 +78,26 @@ async function settle(page: Page, timeout = 15_000): Promise<Snapshot> {
   throw new Error(`rig did not settle within ${timeout} ms (last ${JSON.stringify(last)})`);
 }
 
+/**
+ * Scrolls and waits until the page has actually landed there (plus two frames for the scrub to
+ * apply), so a following settle() can never sample the previous position's state under load.
+ */
 async function scrollToY(page: Page, y: number) {
-  await page.evaluate((top) => window.scrollTo(0, top), Math.round(y));
+  await page.evaluate(
+    (top) =>
+      new Promise<void>((resolve) => {
+        const want = Math.min(top, document.documentElement.scrollHeight - window.innerHeight);
+        window.scrollTo(0, want);
+        const deadline = performance.now() + 10_000;
+        const tick = () => {
+          if (Math.abs(window.scrollY - want) <= 1 || performance.now() > deadline)
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }),
+    Math.max(0, Math.round(y)),
+  );
 }
 
 /**

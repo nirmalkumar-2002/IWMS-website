@@ -293,6 +293,11 @@ export default function Stage({ quality, still, section, onReady, onFail }: Stag
   });
   const [refs] = useState(createSceneRefs);
   const [hud] = useState(createCollectionHud);
+  // QA-only deterministic camera (see Director `steady`); requires `?debug` as well.
+  const [steady] = useState(() => {
+    const q = new URLSearchParams(window.location.search);
+    return q.has('debug') && q.has('testcam');
+  });
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -331,7 +336,7 @@ export default function Stage({ quality, still, section, onReady, onFail }: Stag
         <Suspense fallback={null}>
           <World quality={quality} refs={refs} sunShadows={sunShadows} />
           <Truck refs={refs} />
-          <Director rig={rig} refs={refs} still={still} />
+          <Director rig={rig} refs={refs} still={still} steady={steady} />
           <SunDirector rig={rig} refs={refs} still={still} sunShadows={sunShadows} />
           {!still && <CityLightPool refs={refs} count={quality === 'high' ? 3 : 2} />}
           {!still && <CollectionDirector rig={rig} hud={hud} />}

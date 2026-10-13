@@ -175,14 +175,18 @@ async function scrollToY(page: Page, y: number) {
 }
 
 /**
- * Settled = scrollY, journey, every Phase 3.1 rig value and every overlay anchor's opacity have
- * been identical, and the camera has moved < 0.6 mm per frame, for ≥ 300 ms AND ≥ 12 frames.
- * The camera never stops exactly: the Director adds a deliberate hand-held float (≈ ±2 cm, under
- * 0.4 mm per frame), so "settled" means the scroll damping has died out, not zero motion.
+ * Settled = the page has reached the requested scroll position (when given), then scrollY, journey,
+ * every Phase 3.1 rig value and every overlay anchor's opacity have been identical, and the camera
+ * has moved < 0.6 mm per frame, for ≥ 6 consecutive frames AND ≥ 100 ms.
+ *
+ * Pages open with `?debug&testcam` (Director `steady`): no hand-held float and no camera damping,
+ * so the camera is an exact function of the rig. The scrub maps scroll → rig on the same frame,
+ * so a short frame-counted window after the scroll has landed is enough; nothing waits out
+ * smoothing any more.
  */
-async function settle(page: Page, timeout = 30_000): Promise<State> {
+async function settle(page: Page, target?: number, timeout = 30_000): Promise<State> {
   const ok = await page.evaluate(
-    ({ timeout }) =>
+    ({ timeout, target }) =>
       new Promise<boolean>((resolve) => {
         const h = (window as unknown as { __iwmsHero: HeroDebug }).__iwmsHero;
         const key = () => {
@@ -203,6 +207,8 @@ async function settle(page: Page, timeout = 30_000): Promise<State> {
           ].join('|');
         };
         const start = performance.now();
+        const maxY = document.documentElement.scrollHeight - window.innerHeight;
+        const want = target === undefined ? null : Math.min(Math.max(0, target), maxY);
         let last = key();
         let since = start;
         let frames = 0;
@@ -213,18 +219,19 @@ async function settle(page: Page, timeout = 30_000): Promise<State> {
           const next = h.camera();
           const moved = Math.hypot(next[0] - cam[0], next[1] - cam[1], next[2] - cam[2]);
           cam = next;
-          if (k !== last || moved > 6e-4) {
+          const landed = want === null || Math.abs(window.scrollY - want) <= 1;
+          if (!landed || k !== last || moved > 6e-4) {
             last = k;
             since = now;
             frames = 0;
           } else frames++;
-          if (frames >= 12 && now - since >= 300) return resolve(true);
+          if (frames >= 6 && now - since >= 100) return resolve(true);
           if (now - start > timeout) return resolve(false);
           requestAnimationFrame(tick);
         };
         requestAnimationFrame(tick);
       }),
-    { timeout },
+    { timeout, target: target === undefined ? undefined : Math.round(target) },
   );
   const s = await state(page);
   if (!ok)
@@ -236,12 +243,23 @@ async function settle(page: Page, timeout = 30_000): Promise<State> {
 
 async function at(page: Page, y: number) {
   await scrollToY(page, y);
-  // Give the scroll event and ScrollTrigger's scrub tick a couple of frames to start moving.
-  await page.evaluate(
-    () =>
-      new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
-  );
-  return settle(page);
+  return settle(page, y);
+}
+
+/** Shader program count once it has stopped changing (async compiles finished). */
+async function stablePrograms(page: Page) {
+  let last = await programs(page);
+  let since = Date.now();
+  const deadline = since + 10_000;
+  while (Date.now() < deadline) {
+    await page.waitForTimeout(100);
+    const now = await programs(page);
+    if (now !== last) {
+      last = now;
+      since = Date.now();
+    } else if (Date.now() - since >= 750) break;
+  }
+  return last;
 }
 
 /** Smallest scroll y (px resolution) where `pred` holds; `pred` must be monotonic in scroll. */
@@ -267,16 +285,20 @@ const findPhaseStart = (page: Page, max: number) =>
   findY(page, (s) => s.driveSec > SCENE2_END_SEC + 1e-6, 0, max);
 
 async function openCinematic(page: Page) {
-  await page.goto('/?quality=high&debug');
+  await page.goto('/?quality=high&debug&testcam');
   const hero = page.locator('section.hero');
   await expect(hero).toHaveClass(/\bhero--cinematic\b/);
   await expect(hero).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
   await page.waitForFunction(() => '__iwmsHero' in window, undefined, {
     timeout: 30_000,
   });
-  // Let startExperience wire the ScrollTrigger (it resets scroll to 0).
-  await page.waitForTimeout(1_500);
-  await settle(page);
+  // startExperience resets scroll to 0, creates the ScrollTrigger, then Lenis (which tags <html>).
+  await page.waitForFunction(
+    () => document.documentElement.classList.contains('lenis') && window.scrollY === 0,
+    undefined,
+    { timeout: 30_000 },
+  );
+  await settle(page, 0);
 }
 
 const programs = (page: Page) =>
@@ -863,13 +885,12 @@ test.describe('Phase 3.1–3.2 collection', () => {
         // centimetres of hand-held float swing its (invisible) projection, even across the near plane.
         if (anchor.rendered.opacity < 0.01 && other!.rendered.opacity < 0.01) continue;
         expect(other!.expected.visible, `anchor ${anchor.id}: ${detail}`).toBe(anchor.expected.visible);
-        // Two visits differ only by the Director's clock-driven hand-held float (≈ ±2.4 cm, up to
-        // ≈ ±2.4 px at the 12 m kerb framing). The rig is compared exactly above, and same-frame
-        // marker accuracy (≤ 2 px) is asserted by 'world-anchored markers stay on their anchors'.
+        // With the QA camera (`testcam`: no hand-held float, no damping) two visits to the same
+        // scroll position must place every visible marker identically (sub-pixel rounding only).
         expect(
           Math.hypot(other!.rendered.x - anchor.rendered.x, other!.rendered.y - anchor.rendered.y),
           `anchor ${anchor.id} rendered: ${detail}`,
-        ).toBeLessThanOrEqual(6);
+        ).toBeLessThanOrEqual(2);
         expect(
           Math.abs(other!.rendered.opacity - anchor.rendered.opacity),
           `anchor ${anchor.id} opacity: ${detail}`,
@@ -904,6 +925,43 @@ test.describe('Phase 3.1–3.2 collection', () => {
     expect(w.consoleErrors).toEqual([]);
   });
 
+  test('production camera keeps its hand-held float and smoothing; testcam is exact', async ({
+    page,
+  }) => {
+    // The QA camera must never leak into production: without `testcam` the Director still adds
+    // its clock-driven hand-held float (the camera keeps moving with the rig at rest) ...
+    const camPath = async () => {
+      const max = await maxScroll(page);
+      await at(page, max * 0.85);
+      return page.evaluate(
+        () =>
+          new Promise<number>((resolve) => {
+            const h = (window as unknown as { __iwmsHero: HeroDebug }).__iwmsHero;
+            const first = h.camera();
+            let travel = 0;
+            const t0 = performance.now();
+            const tick = () => {
+              const c = h.camera();
+              travel = Math.max(travel, Math.hypot(c[0] - first[0], c[1] - first[1], c[2] - first[2]));
+              if (performance.now() - t0 < 1500) requestAnimationFrame(tick);
+              else resolve(travel);
+            };
+            requestAnimationFrame(tick);
+          }),
+      );
+    };
+    await page.goto('/?quality=high&debug');
+    await expect(page.locator('section.hero')).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
+    await page.waitForFunction(() => document.documentElement.classList.contains('lenis'));
+    const production = await camPath();
+    expect(production, 'hand-held float present in production').toBeGreaterThan(0.002);
+    expect(production, 'float stays centimetre-scale').toBeLessThan(0.1);
+    // ... while `testcam` makes the camera an exact function of the rig (no motion at rest).
+    await openCinematic(page);
+    const qa = await camPath();
+    expect(qa, 'testcam camera is still at rest').toBeLessThanOrEqual(1e-6);
+  });
+
   test('no errors and no shader programs added after Scene 02', async ({
     page,
   }) => {
@@ -919,17 +977,15 @@ test.describe('Phase 3.1–3.2 collection', () => {
     await openCinematic(page);
     const steps = 30;
     for (let i = 0; i < steps; i++) await at(page, ((y0 - 1) * i) / (steps - 1));
-    await page.waitForTimeout(2_000);
-    const p0 = await programs(page);
+    const p0 = await stablePrograms(page);
     const before = await state(page);
     expect(before.driveSec, fmt(before)).toBeLessThanOrEqual(SCENE2_END_SEC + 1e-6);
     for (let i = 0; i <= steps; i++) await at(page, y0 + ((max - y0) * i) / steps);
-    await page.waitForTimeout(1_000);
-    const p1 = await programs(page);
+    const p1 = await stablePrograms(page);
     // And back through the hand-over once more.
     await at(page, y0 - 600);
     await at(page, max);
-    const p2 = await programs(page);
+    const p2 = await stablePrograms(page);
     test.info().annotations.push({ type: 'programs', description: `${p0} → ${p1} → ${p2}` });
     expect(p1 - p0, `programs Scene 02 end ${p0} → final ${p1}`).toBeLessThanOrEqual(0);
     expect(p2 - p0, `programs after a second pass ${p2}`).toBeLessThanOrEqual(0);
