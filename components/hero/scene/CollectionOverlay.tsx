@@ -134,6 +134,9 @@ export function CollectionHudView({ hud }: { hud: CollectionHud }) {
             <span>{CURRENT_POINT.id}</span>
           </div>
           <div className="hero__phone-sheet">
+            <div className="hero__phone-target">
+              {c.phone.wet} · {SCAN_BIN.id}
+            </div>
             <p data-when="align">{c.phone.align}</p>
             <p data-when="scanning">{c.phone.scanning}</p>
             <p data-when="verified">
@@ -300,6 +303,7 @@ export function CollectionDirector({ rig, hud }: { rig: Rig; hud: CollectionHud 
       if (s.shown) {
         w.style(hud.root, 'visibility', 'hidden');
         w.attr(hud.root, 'data-live', 'false');
+        w.attr(hud.root, 'data-phone', 'false');
         // Leave nothing stale in the hidden DOM: it reflects 'nothing logged' until shown again.
         for (const el of hud.states) w.attr(el, 'data-state', 'pending');
         for (const r of Object.values(hud.rendered)) r.opacity = 0;

@@ -20,9 +20,18 @@ import { BIN, BINS, CURRENT_POINT, binFrontX, type Bin } from './collection';
  */
 
 const COLOURS = {
-  wet: { body: '#2c7a3f', band: '#1f5e30', name: 'WET WASTE', sub: 'Biodegradable' },
-  dry: { body: '#1f5fae', band: '#174a88', name: 'DRY WASTE', sub: 'Recyclable' },
+  wet: { body: '#2f8a46', band: '#1f5e30', name: 'WET WASTE', sub: 'Biodegradable' },
+  dry: { body: '#2466b8', band: '#174a88', name: 'DRY WASTE', sub: 'Recyclable' },
 } as const;
+
+/**
+ * Moulded HDPE reads satin, not glossy. The printed label is a matte sticker with a faint
+ * self-lit term (its own texture as emissive map) so the QR stays legible on the shaded
+ * kerbside; kept low so it never reads as a screen. Both are compiled with the city at load.
+ */
+const BODY_ROUGHNESS = 0.58;
+const LABEL_ROUGHNESS = 0.7;
+const LABEL_EMISSIVE = 0.22;
 
 /** Montserrat 600 and Inter 400 are the weights the site ships (see src/main.tsx). */
 const LABEL_FONTS = ['600 18px Montserrat', '400 13px Inter'];
@@ -41,8 +50,14 @@ export function WasteBins() {
       return {
         bin,
         canvas,
-        body: new MeshStandardMaterial({ color: COLOURS[bin.kind].body, roughness: 0.5 }),
-        label: new MeshStandardMaterial({ map: texture, roughness: 0.6 }),
+        body: new MeshStandardMaterial({ color: COLOURS[bin.kind].body, roughness: BODY_ROUGHNESS }),
+        label: new MeshStandardMaterial({
+          map: texture,
+          roughness: LABEL_ROUGHNESS,
+          emissive: '#ffffff',
+          emissiveMap: texture,
+          emissiveIntensity: LABEL_EMISSIVE,
+        }),
       };
     });
     const labelGeometry = new PlaneGeometry(BIN.label.width, BIN.label.height);

@@ -1,10 +1,20 @@
 import { useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { FogExp2, Vector3, type Color, type Vector3 as V3 } from 'three';
+import { Color, FogExp2, Vector3, type Vector3 as V3 } from 'three';
 import type { SceneRefs } from './handles';
 import { TRUCK_LANE_Z, type Rig } from './rig';
 import { driveAt, type DriveState } from './route';
-import { createSunState, sampleSun, sunAt, type SunState } from './sun';
+import {
+  HOUSEHOLD_GRADE,
+  createSunState,
+  householdGrade,
+  sampleSun,
+  sunAt,
+  type SunState,
+} from './sun';
+
+const GRADE_KEY = new Color(HOUSEHOLD_GRADE.keyColor);
+const GRADE_GROUND = new Color(HOUSEHOLD_GRADE.hemiGround);
 
 /** Shadow camera half-extent (m) and map size: must match the sun light set up in World.tsx. */
 const SHADOW_EXTENT = 40;
@@ -40,6 +50,9 @@ export function SunDirector({
       right: new Vector3(),
       up: new Vector3(),
       worldUp: new Vector3(0, 1, 0),
+      /** The key light's load-time colour (World.tsx), restored whenever the grade is off. */
+      keyBase: null as Color | null,
+      graded: false,
     }),
     [],
   );
@@ -86,6 +99,28 @@ export function SunDirector({
     }
     if (day.keyLight) day.keyLight.intensity = s.key;
     if (day.rimLight) day.rimLight.intensity = s.rim;
+
+    // Phase 3.3 household grade (see HOUSEHOLD_GRADE): 0 — no writes at all — unless collectU > 0,
+    // so Scene 01/02 values are exactly the ones above. Lifts the shaded street-facing side.
+    const grade = still ? 0 : householdGrade(rig.collectU);
+    const key = day.keyLight;
+    if (key && !scratch.keyBase) scratch.keyBase = key.color.clone();
+    if (grade > 0) {
+      const G = HOUSEHOLD_GRADE;
+      frame.scene.environmentIntensity += G.environment * grade;
+      if (refs.sky) {
+        refs.sky.intensity *= 1 + (G.hemiScale - 1) * grade;
+        refs.sky.groundColor.lerp(GRADE_GROUND, grade);
+      }
+      if (key && scratch.keyBase) {
+        key.intensity += G.key * grade;
+        key.color.copy(scratch.keyBase).lerp(GRADE_KEY, grade);
+      }
+      scratch.graded = true;
+    } else if (scratch.graded) {
+      if (key && scratch.keyBase) key.color.copy(scratch.keyBase);
+      scratch.graded = false;
+    }
 
     // Sun: a fixed-direction directional light; with shadows its frustum follows the truck,
     // snapped to shadow-map texels so the shadow edges don't shimmer as the camera moves.

@@ -16,3 +16,19 @@ export const siteConfig = {
   description:
     'IWMS connects QR-verified collection, GPS fleets, IoT weighbridges and citizen apps into one accountable waste management platform for Indian cities.',
 } as const;
+
+/**
+ * Request Demo destination. A real `email` gives a mailto with a subject line. While `email` is
+ * still a `{{placeholder}}` we never ship a mailto to it: the action falls back to the company
+ * website (real, approved: `website`), opened in a new tab.
+ */
+export function demoRequestLink() {
+  const email: string = siteConfig.email;
+  if (email && !email.includes('{{')) {
+    return {
+      href: `mailto:${email}?subject=${encodeURIComponent('IWMS demo request')}`,
+      external: false,
+    };
+  }
+  return { href: siteConfig.website, external: true };
+}

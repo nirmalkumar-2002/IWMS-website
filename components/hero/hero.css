@@ -68,6 +68,14 @@
   display: inline-block;
   will-change: opacity, transform, filter;
 }
+/* Product positioning (Phase 3.3): arrives with the title, reads as its supporting line. */
+.hero__positioning {
+  max-width: 34rem;
+  margin: 1rem 0 0;
+  font-size: clamp(0.92rem, 1.05vw, 1.08rem);
+  line-height: 1.5;
+  color: rgba(232, 237, 245, 0.86);
+}
 .hero__subtitle {
   margin: 1.1rem 0 0;
   font-size: clamp(0.95rem, 1.2vw, 1.2rem);
@@ -103,6 +111,7 @@
 
 /* With JS, copy waits for its cinematic cue; still/static modes show it immediately. */
 .js .hero:not(.hero--still):not(.hero--static) .hero__word,
+.js .hero:not(.hero--still):not(.hero--static) .hero__positioning,
 .js .hero:not(.hero--still):not(.hero--static) .hero__subtitle,
 .js .hero:not(.hero--still):not(.hero--static) .hero__city-line {
   opacity: 0;
@@ -120,6 +129,10 @@
   .hero__title {
     font-size: clamp(1.25rem, 6vw, 2rem);
     letter-spacing: 0.12em;
+  }
+  .hero__positioning {
+    margin-top: 0.8rem;
+    font-size: 0.9rem;
   }
   .hero__copy--city {
     top: auto;
@@ -215,10 +228,12 @@
 /* QR scan: corner brackets on the bin's tag (inside the phone viewfinder), a sweep, a check. */
 .hero__scan-frame {
   fill: none;
-  stroke: rgba(232, 237, 245, 0.92);
-  stroke-width: 2;
+  stroke: rgba(240, 244, 250, 0.96);
+  stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
+  /* A thin dark halo keeps the brackets readable over the white label and the bright bin. */
+  filter: drop-shadow(0 0 1.5px rgba(6, 9, 15, 0.85));
 }
 .hero__scan[data-verified='true'] .hero__scan-frame {
   stroke: var(--signal);
@@ -264,11 +279,40 @@
   inset: 0;
   border: 11px solid #0c0e11;
   border-radius: 40px;
+  /* A satin metal edge and a dark outline keep the device distinct from whatever bin colour sits
+     behind it; the last, very wide shadow gently dims the scene outside the viewfinder (focus).
+     It is part of the phone, so it fades with the phone's own opacity (phoneK); the monitor
+     follows in DOM order and stays above it. */
   box-shadow:
-    0 0 0 1px rgba(232, 237, 245, 0.16),
-    0 30px 80px rgba(0, 0, 0, 0.55),
-    inset 0 0 0 1px rgba(0, 0, 0, 0.6);
+    0 0 0 1.5px rgba(196, 204, 216, 0.55),
+    0 0 0 4px rgba(6, 9, 15, 0.55),
+    0 24px 60px rgba(0, 0, 0, 0.5),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 0 200vmax rgba(6, 9, 15, 0.42);
   overflow: hidden;
+}
+/* The tag the app expects at this household: the scanned code is the wet bin's, unambiguously. */
+.hero__phone-target {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.hero__phone-target::before {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 2px;
+  background: #2f8a46;
+  box-shadow: 0 0 0 1px rgba(232, 237, 245, 0.35);
+}
+.hero__phone[data-state='verified'] .hero__phone-target {
+  display: none;
 }
 .hero__phone-bar {
   display: flex;
@@ -328,10 +372,10 @@
   color: var(--text-muted);
 }
 
-/* Scene copy, top-left like the other scenes. */
+/* Scene copy, top-left like the other scenes; always clear of the fixed site header (~64 px). */
 .hero__collect-copy {
   position: absolute;
-  top: 12vh;
+  top: max(12vh, 5.5rem);
   left: 8vw;
   max-width: min(36vw, 30rem);
   opacity: 0;
@@ -356,7 +400,7 @@
 /* IWMS collection monitor: one quiet glass card, clearly labelled as demo data. */
 .hero__monitor {
   position: absolute;
-  top: 12vh;
+  top: max(12vh, 5.5rem);
   right: 4vw;
   width: min(19.5rem, 30vw);
   padding: 0.95rem 1.05rem 1rem;
@@ -572,24 +616,69 @@
   font-weight: 600;
 }
 
-/* Portrait: copy below the badge, monitor across the bottom (map folded away for space). */
+/* Portrait: copy below the site header; a compact monitor across the bottom (map and route row
+   folded away) so the gate, the bins and their bases stay visible above it. */
 @media (max-aspect-ratio: 4/5) {
   .hero__collect-copy {
-    top: 4.8rem;
+    top: 5.25rem;
     left: 6vw;
     right: 6vw;
     max-width: none;
   }
+  .hero__collect-title {
+    font-size: 1.15rem;
+  }
   .hero__monitor {
     top: auto;
-    bottom: 1.5rem;
-    left: 6vw;
-    right: 6vw;
+    bottom: 1rem;
+    left: 4vw;
+    right: 4vw;
     width: auto;
-    padding: 0.75rem 0.9rem 0.8rem;
+    padding: 0.6rem 0.8rem 0.65rem;
+    border-radius: 6px;
   }
-  .hero__map {
+  .hero__monitor-head {
+    padding-bottom: 0.45rem;
+  }
+  .hero__monitor-title {
+    font-size: 0.66rem;
+  }
+  .hero__map,
+  .hero__monitor-rows > div:nth-child(2) {
     display: none;
+  }
+  .hero__monitor-rows {
+    gap: 0.3rem;
+    margin-top: 0.45rem;
+    font-size: 0.72rem;
+  }
+  /* Served count and its bar on one line. */
+  .hero__monitor-rows dd {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .hero__monitor-bar {
+    width: 3.5rem;
+    margin: 0 0 0 0.45rem;
+  }
+  .hero__monitor-sub {
+    margin: 0.5rem 0 0.3rem;
+    padding-top: 0.45rem;
+    font-size: 0.6rem;
+  }
+  .hero__states {
+    gap: 0.28rem;
+    font-size: 0.72rem;
+  }
+  .hero__states li[data-state='awaiting'] .hero__states-awaiting {
+    display: inline;
+    margin: 0 0 0 0.4rem;
+    font-size: 0.64rem;
+  }
+  .hero__monitor-next {
+    margin-top: 0.45rem;
+    font-size: 0.68rem;
   }
   .hero__phone {
     height: 62vh;
@@ -602,7 +691,7 @@
   /* The stage is 100lvh: stay above the browser toolbar while it is showing. */
   @supports (height: 100svh) {
     .hero__monitor {
-      bottom: calc(1.5rem + 100lvh - 100svh);
+      bottom: calc(1rem + 100lvh - 100svh);
     }
   }
 }
@@ -652,7 +741,8 @@
    to the full stage height. */
 @media (max-aspect-ratio: 4/5) {
   .hero__proxy-note {
-    top: 1rem;
+    /* Below the fixed site header (internal/debug builds only). */
+    top: 4.25rem;
     bottom: auto;
     left: 1rem;
     font-size: 0.6rem;

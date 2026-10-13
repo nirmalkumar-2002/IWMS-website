@@ -307,6 +307,20 @@ function addCollection(tl: gsap.core.Timeline, rig: Rig, start: number) {
 type CollectKey = 'pin' | 'net' | 'gps' | 'route' | 'scan' | 'done';
 
 /**
+ * Page-navigation handle (site header: Skip Intro / Explore Platform). It never retimes the
+ * timelines: it only scrolls to where a reveal label already sits.
+ */
+export interface Experience {
+  /** Teardown (ScrollTrigger, Lenis, tweens). */
+  dispose: () => void;
+  /**
+   * Scrolls to a reveal-timeline label (`immediate`: jump without scrubbing the scroll between).
+   * Returns false for an unknown label.
+   */
+  goTo: (label: string, immediate?: boolean) => boolean;
+}
+
+/**
  * Wires intro + reveal to the page. The intro never locks scrolling: if the visitor scrolls
  * early it fast-forwards, and it completes instantly before the copy-clearing headlight shot.
  */
@@ -314,17 +328,18 @@ export function startExperience(
   rig: Rig,
   section: HTMLElement,
   copy: CopyElements,
-) {
+): Experience {
   const ctx = gsap.context(() => {});
   let lenis: Lenis | null = null;
   const touch = window.matchMedia('(pointer: coarse)').matches;
+  let goTo: Experience['goTo'] = () => false;
 
   ctx.add(() => {
     const intro = buildIntro(rig, copy);
     const reveal = buildReveal(rig, copy);
     const headlightAt = reveal.labels.headlight / reveal.duration();
 
-    ScrollTrigger.create({
+    const st = ScrollTrigger.create({
       trigger: section,
       start: 'top top',
       end: 'bottom bottom',
@@ -338,6 +353,18 @@ export function startExperience(
       },
     });
     intro.play(0);
+
+    goTo = (label, immediate = true) => {
+      if (!(label in reveal.labels)) return false;
+      // Settle the intro first: ScrollTrigger renders the reveal before onUpdate completes the
+      // intro, so a jump past `headlight` mid-intro would let the intro's title reveal win.
+      if (intro.progress() < 1) intro.progress(1);
+      // Measured at call time (start/end are re-measured on refresh).
+      const y = st.start + (reveal.labels[label] / reveal.duration()) * (st.end - st.start);
+      if (lenis) lenis.scrollTo(y, { immediate, force: true });
+      else window.scrollTo({ top: y, behavior: immediate ? 'instant' : 'smooth' });
+      return true;
+    };
   });
 
   const raf = (time: number) => lenis?.raf(time * 1000);
@@ -348,10 +375,13 @@ export function startExperience(
     gsap.ticker.lagSmoothing(0);
   }
 
-  return () => {
-    gsap.ticker.remove(raf);
-    lenis?.destroy();
-    lenis = null;
-    ctx.revert();
+  return {
+    dispose: () => {
+      gsap.ticker.remove(raf);
+      lenis?.destroy();
+      lenis = null;
+      ctx.revert();
+    },
+    goTo: (label, immediate) => goTo(label, immediate),
   };
 }

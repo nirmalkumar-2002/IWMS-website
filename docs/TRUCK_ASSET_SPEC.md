@@ -11,7 +11,7 @@ This is the brief for the 3D artist preparing the licensed photoreal garbage tru
 | Geometry compression | Draco. The decoder is self-hosted in `public/draco/` and passed to `useGLTF(url, '/draco/')`. |
 | Textures | WebP or JPEG/PNG. **KTX2/Basis is not wired up and will fail to load.** |
 
-`vite.config.ts` checks whether this file exists when Vite starts. If it does, `__TRUCK_MODEL__` is `true`: `ModelTruck` replaces the development `ProxyTruck`, and the "Development proxy vehicle" label in the corner of the hero disappears. No code change is needed. Restart `npm run dev` after adding or removing the file, because the flag is evaluated only once.
+`vite.config.ts` checks whether this file exists when Vite starts. If it does, `__TRUCK_MODEL__` is `true`: `ModelTruck` replaces the development `ProxyTruck`, and the "Development proxy vehicle" label in the corner of the hero disappears (since Phase 3.3 that label is shown only in internal/debug mode — `?debug` or `npm run dev` — so check there). No code change is needed. Restart `npm run dev` after adding or removing the file, because the flag is evaluated only once.
 
 ## 2. Units, axes, origin
 
@@ -136,7 +136,7 @@ npm run build && npm run start      # serves dist/ at http://127.0.0.1:4173
 
 Open `http://127.0.0.1:4173/?quality=high` (full post-processing) and `?quality=medium`, and check:
 
-1. The "Development proxy vehicle" label is gone.
+1. The "Development proxy vehicle" label is gone, including in debug mode (`?debug`).
 2. During the intro, the amber markers light first, then the tails, then the +Z headlight, then the −Z headlight. The beams and road pools originate exactly at the lenses.
 3. Scroll through the shots: the headlight close-up frames the +Z lens, and the wheel close-up shows clean rotation with no wobble (a wobble means the pivot is off-centre).
 4. At the drive-off, the wheels roll without sliding (correct radius), and the body squats slightly about the rear axle while the wheels stay planted.

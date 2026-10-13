@@ -41,6 +41,7 @@ import { applyStill, startExperience } from './scene/timeline';
 import { Truck } from './scene/Truck';
 import { World } from './scene/World';
 import type { Quality } from './quality';
+import type { HeroBridge } from '@/components/site/bridge';
 
 // Post-processing ships in its own chunk; only the high tier downloads it.
 const Effects = lazy(() =>
@@ -249,6 +250,8 @@ export interface StageProps {
   section: HTMLElement;
   onReady: () => void;
   onFail: () => void;
+  /** Receives the header navigation bridge once the scroll experience is live (null on teardown). */
+  onBridge?: (bridge: HeroBridge | null) => void;
 }
 
 /** Fires once the scene has mounted and two frames have been presented (shaders compiled). */
@@ -283,7 +286,14 @@ function LoadingLine() {
   );
 }
 
-export default function Stage({ quality, still, section, onReady, onFail }: StageProps) {
+export default function Stage({
+  quality,
+  still,
+  section,
+  onReady,
+  onFail,
+  onBridge,
+}: StageProps) {
   // Real-time sun shadows only where the GPU budget allows (decided from Phase 2.2 measurements).
   const sunShadows = quality === 'high' && !still;
   const [rig] = useState(() => {
@@ -298,18 +308,37 @@ export default function Stage({ quality, still, section, onReady, onFail }: Stag
     const q = new URLSearchParams(window.location.search);
     return q.has('debug') && q.has('testcam');
   });
+  // Internal labelling (proxy vehicle badge): dev server or `?debug` only, never the presentation.
+  const [internal] = useState(
+    () => import.meta.env.DEV || new URLSearchParams(window.location.search).has('debug'),
+  );
   const [ready, setReady] = useState(false);
+  const bridgeCallback = useRef(onBridge);
+  useEffect(() => {
+    bridgeCallback.current = onBridge;
+  });
 
   useEffect(() => {
     if (!ready || still) return;
     const copy = {
-      words: [...section.querySelectorAll<HTMLElement>('.hero__word')],
+      // The positioning line rides with the title words: it joins the intro stagger after the
+      // last word (the title keeps its 6.2 s cue) and clears/returns/clears with the title.
+      words: [...section.querySelectorAll<HTMLElement>('.hero__word, .hero__positioning')],
       subtitle: section.querySelector<HTMLElement>('.hero__subtitle')!,
       city: [...section.querySelectorAll<HTMLElement>('.hero__city-line')],
     };
     window.history.scrollRestoration = 'manual';
     window.scrollTo(0, 0);
-    return startExperience(rig, section, copy);
+    const experience = startExperience(rig, section, copy);
+    // The bridge exists only once the ScrollTrigger does (after the reset to the top above), so a
+    // header action can never be lost or undone by that reset: the actions appear when it is live.
+    bridgeCallback.current?.({
+      goTo: (label, { immediate = true } = {}) => experience.goTo(label, immediate),
+    });
+    return () => {
+      bridgeCallback.current?.(null);
+      experience.dispose();
+    };
   }, [ready, still, rig, section]);
 
   return (
@@ -353,7 +382,8 @@ export default function Stage({ quality, still, section, onReady, onFail }: Stag
       </Canvas>
       {!still && <CollectionHudView hud={hud} />}
       <LoadingLine />
-      {!__TRUCK_MODEL__ && (
+      {/* Asset status stays documented (docs/TRUCK_ASSET_SPEC.md); the badge is internal-only. */}
+      {!__TRUCK_MODEL__ && internal && (
         <p className="hero__proxy-note">
           Development proxy vehicle — final licensed truck model pending
         </p>

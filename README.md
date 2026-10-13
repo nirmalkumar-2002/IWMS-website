@@ -29,7 +29,7 @@ Requires Node.js 22.12+ or 24. On Windows PowerShell, use `npm.cmd`.
 | --- | --- |
 | `CinematicHero.tsx` | Section markup and copy (SSR-identical). After hydration it picks the mode (cinematic / still / static poster) and lazy-loads `Stage`. An error boundary falls back to the poster. |
 | `quality.ts` | `detectQuality()`: decides the render tier, including the `?quality=` override |
-| `Stage.tsx` | R3F `<Canvas>` (DPR, tone mapping, context-loss handling), loading line, ready signal, starts the timelines. Shows the dev-proxy label. |
+| `Stage.tsx` | R3F `<Canvas>` (DPR, tone mapping, context-loss handling), loading line, ready signal, starts the timelines. Shows the dev-proxy label in internal/debug mode (`?debug` or `npm run dev`). |
 | `hero.css` | Hero layout, copy typography, poster backdrop, loader |
 | `scene/rig.ts` | Mutable `Rig` state, camera shot list and spline, focal-length→FOV conversion, drive-off kinematics |
 | `scene/timeline.ts` | GSAP intro (approach + lamp ignition + title reveal), scroll-scrubbed reveal (shots, drive-off), Lenis wiring, reduced-motion still pose |
@@ -66,7 +66,7 @@ No HDRI is shipped. Reflections come from drei `<Environment>` rendering the sce
 
 ## Outstanding: licensed truck model
 
-The truck currently on screen is a **development proxy**, labelled as such in the corner of the hero. The production vehicle is a licensed photoreal GLB still to be purchased and prepared. To swap it in, drop it at `public/models/garbage-truck.glb`; the build detects the file and uses it automatically. Node naming, units, lamp positions, budgets and the compression command are in **[docs/TRUCK_ASSET_SPEC.md](docs/TRUCK_ASSET_SPEC.md)**.
+The truck currently on screen is a **development proxy** (the city is a procedural stand-in too). Since Phase 3.3 the "Development proxy vehicle" label appears in the corner of the hero only in internal/debug mode (`?debug` or `npm run dev`), not in stakeholder-facing builds — the assets are still proxies, not approved photoreal models. The production vehicle is a licensed photoreal GLB still to be purchased and prepared. To swap it in, drop it at `public/models/garbage-truck.glb`; the build detects the file and uses it automatically. Node naming, units, lamp positions, budgets and the compression command are in **[docs/TRUCK_ASSET_SPEC.md](docs/TRUCK_ASSET_SPEC.md)**.
 
 ## Deployment
 

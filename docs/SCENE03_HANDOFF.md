@@ -237,6 +237,58 @@ These were redundant with the monitor, put the truck rather than IWMS at the cen
 | QR plate on the H‑12 gate pillar (`QR_PLATE`, `scene/QrPlate.tsx`) | IWMS verification is done on the household's tagged bin, so the tag now lives on the bin; a pillar plate verified the address, not the waste stream |
 | Floating "Scanning household QR" / "QR verified" world caption | the phone app's status sheet now carries the scan state; a caption in the world duplicated it |
 
+## Phase 3.3 refinements (UX and visual; no timing changes)
+
+Scroll length (1780vh), every timeline label and tween, the camera keys, the dwell times, the truck kinematics and the Scene 01/02 sunrise are all unchanged. The only change to `timeline.ts` is that `startExperience` now returns `{ dispose, goTo }`.
+
+### Site header (`components/site/SiteHeader.tsx`)
+
+- **Position and markup.** The header is fixed and sits outside the hero `<section>`, so it adds no page height. It is in the prerendered HTML, so it works without JS.
+- **Brand.** Zigma logo plus "IWMS"; it links to `/`.
+- **Skip intro.** Shown only in cinematic mode, once the experience has started. It calls `goTo('collect:end', immediate)`: the intro completes first, then the page jumps instead of scrubbing. Focus then moves to the IWMS monitor.
+- **Explore platform.**
+  - In cinematic mode it calls `goTo('collect:household')`.
+  - Otherwise (no JS, reduced motion, static) it is a real link to `/brand/iwms-brochure.pdf`.
+- **Request demo.** `demoRequestLink()` in `content/config.ts` decides the target:
+  - It becomes a mailto as soon as a real contact email replaces `{{CONTACT_EMAIL}}`.
+  - Until then it opens https://www.zigma.in in a new tab.
+- **Deferred.** Other navigation items (Modules, Solutions, Case studies, Contact) wait until those sections exist. There are no placeholder links.
+
+### Hero copy
+
+`heroContent.positioning` (PROPOSED) adds a one-line product statement under the title. It is part of the SSR markup, joins the intro stagger after the title words (the title keeps its 6.2 s cue) and fades with the title.
+
+### Proxy badge
+
+The "Development proxy vehicle" badge shows only in internal mode: `npm run dev` or `?debug`. The assets are still development proxies; see `docs/TRUCK_ASSET_SPEC.md`.
+
+### Household grade (`householdGrade(collectU)` in `scene/sun.ts`, applied last in `SunDirector`)
+
+- **Shape.** A smoothstep over `collectU` 0 → 0.5, the arrive → household camera move.
+- **Scope.** It is exactly 0 and makes no writes while `collectU = 0`, which covers all of Scene 01/02. It is also 0 in still mode.
+- **What it changes at full grade (`HOUSEHOLD_GRADE`):**
+  - The street-facing key light rises by 1.15, and its colour moves to `#efe7dc`.
+  - Hemisphere intensity is multiplied by 1.5, with the ground colour moving to `#5e5446`.
+  - `environmentIntensity` rises by 0.45.
+- **Untouched:** the sun light, `refs.day.progress`, fog, rim, fill and exposure.
+- **Cost.** Uniform-only, so no shader recompiles. The program count stays at 29 from Scene 02 through every Phase 3 beat.
+
+### Bins and QR
+
+- **Bins.** Slightly lighter bodies (wet `#2f8a46`, dry `#2466b8`) with satin roughness. Labels are matte, with the label texture as its own emissive map at 0.22, set at creation. QR contrast holds in shade.
+- **Phone.**
+  - A metallic bezel ring and dark outline separate the phone from the green bin.
+  - A focus dim (0.42) covers everything outside the viewfinder; it is part of the phone, so it fades with it.
+  - Scan brackets are 3 px with a dark halo.
+  - A target line (`.hero__phone-target`, "Wet waste · BIN-0712-W") shows during align and scanning.
+- **Headline.** It steps aside while the phone is up, on every viewport.
+
+### Layout
+
+- **Desktop.** The monitor and scene copy sit at `top: max(12vh, 5.5rem)`, below the header.
+- **Portrait.** A compact monitor: the map and Route row are hidden, rows are inline, and type is smaller. The household bins and gate stay visible above it.
+- **Stale state.** The `data-phone` attribute is reset whenever the layer hides.
+
 ## How to connect the next phase
 
 1. **Timeline.** Continue after `collect:end` (33.30) in `timeline.ts`, following the `addCollection` pattern.

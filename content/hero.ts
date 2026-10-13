@@ -5,6 +5,12 @@ export const heroContent = {
   sceneLabel:
     'Cinematic scene: a green municipal waste collection truck switches on its headlights on a quiet road before dawn, then pulls away.',
   loading: 'Loading scene',
+  /**
+   * Product positioning under the title (Phase 3.3). PROPOSED — not yet approved. Capabilities
+   * only, taken from the IWMS brochure (QR verification, GPS tracking, weighbridge integration).
+   */
+  positioning:
+    'QR-verified household collection, GPS fleet tracking and weighbridge integration on one platform.',
   /** Scene 02 copy. PROPOSED marketing lines — not yet approved; edit freely here. */
   city: {
     title: 'Smart Collection. Connected Cities.',
@@ -47,4 +53,27 @@ export const heroContent = {
       },
     },
   },
+} as const;
+
+/**
+ * Site header copy (Phase 3.3). Labels only, no claims. `short*` are the visible words kept on
+ * narrow screens; each accessible name still contains the visible label.
+ */
+export const headerContent = {
+  brand: 'IWMS',
+  brandFull: 'Integrated Waste Management Suite',
+  brandBy: 'by Zigma',
+  homeLabel: 'IWMS by Zigma, home',
+  navLabel: 'Platform',
+  skipIntro: 'Skip intro',
+  skipIntroLabel: 'Skip intro: go to the IWMS collection monitor',
+  explore: 'Explore platform',
+  exploreShort: 'Platform',
+  /** Before the scroll experience is live (and in still/static modes) Explore opens the brochure. */
+  exploreBrochureLabel: 'Explore platform: IWMS brochure (PDF)',
+  demo: 'Request demo',
+  demoShort: 'Demo',
+  /** Used while the contact email is unconfigured and the action falls back to the website. */
+  demoWebsiteLabel:
+    'Request demo: contact Zigma at www.zigma.in (opens in a new tab)',
 } as const;

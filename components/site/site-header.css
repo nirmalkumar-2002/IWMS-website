@@ -1,0 +1,164 @@
+/* Site header (Phase 3.3). Fixed over the pinned stage: no page height, no backdrop blur (the
+   canvas below changes every frame). Above the hero loader/proxy badge (3), below .skip-link (100). */
+.site-header {
+  position: fixed;
+  z-index: 20;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem clamp(1rem, 4vw, 3rem);
+  background: linear-gradient(
+    to bottom,
+    rgba(10, 15, 28, 0.78) 0%,
+    rgba(10, 15, 28, 0.42) 60%,
+    rgba(10, 15, 28, 0) 100%
+  );
+  color: var(--text-light);
+  font-family: var(--font-inter), 'Segoe UI', system-ui, sans-serif;
+  pointer-events: none;
+}
+.site-header > * {
+  pointer-events: auto;
+}
+
+.site-header__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 44px;
+  text-decoration: none;
+  color: inherit;
+}
+.site-header__logo {
+  display: block;
+  width: auto;
+  height: 2.25rem;
+}
+.site-header__wordmark {
+  font-family: var(--font-display), 'Segoe UI', system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 1.2rem;
+  letter-spacing: 0.14em;
+}
+.site-header__descriptor {
+  display: flex;
+  flex-direction: column;
+  padding-left: 0.75rem;
+  border-left: 1px solid rgba(232, 237, 245, 0.22);
+  font-size: 0.7rem;
+  line-height: 1.35;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.site-header__by {
+  color: rgba(232, 237, 245, 0.55);
+}
+
+.site-header__nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.site-header__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 1rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+.site-header__action--quiet {
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-decoration-color: rgba(232, 237, 245, 0.3);
+}
+.site-header__action--quiet:hover {
+  color: var(--text-light);
+  text-decoration-color: currentColor;
+}
+.site-header__action--outline {
+  border-color: rgba(232, 237, 245, 0.32);
+  background: rgba(10, 15, 28, 0.35);
+}
+.site-header__action--outline:hover {
+  border-color: rgba(232, 237, 245, 0.7);
+}
+.site-header__action--primary {
+  background: var(--amber);
+  color: var(--night-950);
+}
+.site-header__action--primary:hover {
+  background: #ffb54d;
+}
+.site-header__action:focus-visible,
+.site-header__brand:focus-visible {
+  outline: 2px solid var(--text-light);
+  outline-offset: 3px;
+}
+.site-header__short {
+  display: none;
+}
+
+/* Mid widths: drop the descriptor first. */
+@media (max-width: 960px) {
+  .site-header__descriptor {
+    display: none;
+  }
+}
+/* Phones: short labels, tighter spacing; every target stays 44px. */
+@media (max-width: 560px) {
+  .site-header {
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+  }
+  .site-header__brand {
+    gap: 0.45rem;
+  }
+  .site-header__logo {
+    height: 1.9rem;
+  }
+  .site-header__wordmark {
+    font-size: 1.05rem;
+    letter-spacing: 0.1em;
+  }
+  .site-header__nav {
+    gap: 0.3rem;
+  }
+  .site-header__action {
+    padding: 0 0.7rem;
+    font-size: 0.8rem;
+  }
+  .site-header__action--quiet {
+    padding: 0 0.4rem;
+  }
+  .site-header__long {
+    display: none;
+  }
+  .site-header__short {
+    display: inline;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .site-header__action {
+    transition: none;
+  }
+}

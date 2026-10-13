@@ -228,6 +228,35 @@ export function sampleSun(sun: number, out: SunState): SunState {
 }
 
 /**
+ * Phase 3.3 household grade. The H-12 compound walls and bins face −X, away from the low
+ * morning sun (azimuth +12°), so the household frames sat in deep shade. While the camera turns
+ * to the household (`rig.collectU` 0 → 0.5, the arrive → household move) the existing sky lights
+ * lift the shaded side the way open morning sky and the sunlit street's bounce would. Applied
+ * only when collectU > 0 (Phase 3; the truck is past JOURNEY_END there), so every Scene 01/02
+ * frame is untouched. Intensity/colour only: no light is added, removed or re-flagged.
+ */
+export const HOUSEHOLD_GRADE = {
+  /** collectU over which the grade ramps in (smoothstep), = the household camera key. */
+  rampU: 0.5,
+  /** Added to the cool pre-dawn key (from −X, i.e. lighting the street-facing walls). */
+  key: 1.15,
+  /** Key colour at full grade: neutral, slightly warm open-sky light. */
+  keyColor: '#efe7dc',
+  /** Hemisphere intensity multiplier and ground (bounce) colour at full grade. */
+  hemiScale: 1.5,
+  hemiGround: '#5e5446',
+  /** Added to the environment (reflection/IBL) intensity. */
+  environment: 0.45,
+};
+
+/** Grade weight for a collection-camera progress: exactly 0 at and before Scene 02's end. */
+export function householdGrade(collectU: number) {
+  if (!(collectU > 0)) return 0;
+  const t = Math.min(1, collectU / HOUSEHOLD_GRADE.rampU);
+  return t * t * (3 - 2 * t);
+}
+
+/**
  * Per-lamp photocell: each real (pooled) street light switches off at its own point in
  * s ∈ [0.55, 0.66], hashed from its position, fading over Δs = 0.03 — never a global pop.
  */

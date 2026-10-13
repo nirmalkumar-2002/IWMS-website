@@ -4,6 +4,9 @@ import { test, expect, type Page } from '@playwright/test';
 
 const TITLE_WORDS = ['INTEGRATED', 'WASTE', 'MANAGEMENT', 'SUITE'];
 const SUBTITLE = 'A unified digital platform for waste management.';
+/** Phase 3.3: early IWMS positioning under the title; rides with the title words. */
+const POSITIONING =
+  'QR-verified household collection, GPS fleet tracking and weighbridge integration on one platform.';
 const CITY_TITLE = 'Smart Collection. Connected Cities.';
 const CITY_SUBTITLE = 'GPS-enabled fleet tracking and optimized collection routes.';
 
@@ -33,12 +36,15 @@ async function expectCopyVisible(page: Page) {
   await expect(page.locator('h1#hero-title .hero__word')).toHaveCount(
     TITLE_WORDS.length,
   );
+  const positioning = page.locator('h1#hero-title + p.hero__positioning');
+  await expect(positioning).toBeVisible();
+  await expect(positioning).toHaveText(POSITIONING);
   const subtitle = page.locator('.hero__subtitle');
   await expect(subtitle).toBeVisible();
   await expect(subtitle).toHaveText(SUBTITLE);
   await expect
-    .poll(() => opacities(page, '.hero__word, .hero__subtitle'))
-    .toEqual(Array(TITLE_WORDS.length + 1).fill(1));
+    .poll(() => opacities(page, '.hero__word, .hero__positioning, .hero__subtitle'))
+    .toEqual(Array(TITLE_WORDS.length + 2).fill(1));
 }
 
 /** Scene 02 copy: present and fully opaque (static/still/no-JS modes). */
@@ -156,8 +162,8 @@ test.describe('cinematic', () => {
     // Intro (~9.5 s) reveals the title by ~8 s; allow margin.
     await page.waitForTimeout(11_000);
     await expect
-      .poll(() => opacities(page, '.hero__word'), { timeout: 5_000 })
-      .toEqual(Array(TITLE_WORDS.length).fill(1));
+      .poll(() => opacities(page, '.hero__word, .hero__positioning'), { timeout: 5_000 })
+      .toEqual(Array(TITLE_WORDS.length + 1).fill(1));
 
     // Scroll to the bottom (end of Phase 3.1, past Scene 02): Scene 01 copy and the city copy
     // are both clear.
@@ -166,10 +172,10 @@ test.describe('cinematic', () => {
     );
     await page.waitForTimeout(3_000);
     await expect
-      .poll(() => opacities(page, '.hero__word, .hero__subtitle'), {
+      .poll(() => opacities(page, '.hero__word, .hero__positioning, .hero__subtitle'), {
         timeout: 5_000,
       })
-      .toEqual(Array(TITLE_WORDS.length + 1).fill(0));
+      .toEqual(Array(TITLE_WORDS.length + 2).fill(0));
     await expect
       .poll(() => opacities(page, '.hero__city-line'), { timeout: 5_000 })
       .toEqual([0, 0]);
@@ -178,8 +184,8 @@ test.describe('cinematic', () => {
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.waitForTimeout(3_000);
     await expect
-      .poll(() => opacities(page, '.hero__word'), { timeout: 5_000 })
-      .toEqual(Array(TITLE_WORDS.length).fill(1));
+      .poll(() => opacities(page, '.hero__word, .hero__positioning'), { timeout: 5_000 })
+      .toEqual(Array(TITLE_WORDS.length + 1).fill(1));
     expect(await opacities(page, '.hero__city-line')).toEqual([0, 0]);
 
     expect(w.pageErrors).toEqual([]);
