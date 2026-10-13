@@ -12,6 +12,7 @@ import { useProgress } from '@react-three/drei';
 import { ACESFilmicToneMapping } from 'three';
 import 'lenis/dist/lenis.css';
 import { CityLightPool } from './scene/CityLightPool';
+import { WasteBins } from './scene/WasteBins';
 import {
   CollectionDirector,
   CollectionHudView,
@@ -63,6 +64,8 @@ function CityMount({ quality, refs }: Pick<StageProps, 'quality'> & { refs: Scen
     <group ref={group}>
       <Suspense fallback={null}>
         <City quality={quality} refs={refs} />
+        {/* Phase 3.2 QR-tagged household bins: part of the city group, so they compile with it. */}
+        <WasteBins />
         <AfterMount
           run={async (gl, camera, scene) => {
             const root = group.current;
@@ -199,6 +202,8 @@ function DebugHook({
           gps: rig.gps,
           route: rig.route,
           net: rig.net,
+          scan: rig.scan,
+          done: rig.done,
           stopDistance: STOP_DISTANCE,
           stopSec: STOP_SEC,
           collectEndSec: COLLECT_END_SEC,

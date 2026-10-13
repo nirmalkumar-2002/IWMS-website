@@ -24,17 +24,22 @@ export interface Rig {
   driveSec: number;
   /** 0..1 along Scene 02's truck-relative camera spline. Owned by the scroll timeline. */
   cityU: number;
-  /** 0..1 along Phase 3.1's collection camera spline (0 = Scene 02's `arrive`). Scroll timeline. */
+  /** 0..1 along the collection camera spline (0 = Scene 02's `arrive`). Scroll timeline. */
   collectU: number;
   /**
-   * Phase 3.1 digital layer, 0..1 each. Owned by the scroll timeline:
-   * pin = collection point marker, gps = vehicle GPS tag, route = planned route + nearby points,
-   * net = IWMS platform link and monitor panel.
+   * Phase 3.1–3.2 digital layer, 0..1 each, owned by the scroll timeline. They are distinct
+   * business states: GPS arrival never implies verification, and verification never implies
+   * completion.
+   * pin = H-12 collection-point marker; net = IWMS monitor panel; gps = vehicle arrived at the
+   * household (GPS proximity only); route = planned route + nearby points in the monitor map;
+   * scan = bin QR scan (verified at ≥ 0.95); done = collection completed (only once verified).
    */
   pin: number;
   gps: number;
   route: number;
   net: number;
+  scan: number;
+  done: number;
   /** 0..1 pre-dawn sky brightening across the reveal. Owned by the scroll timeline. */
   dawn: number;
   /** Lamp levels (0..~1.04). Owned by the intro. */
@@ -57,6 +62,8 @@ export const createRig = (): Rig => ({
   gps: 0,
   route: 0,
   net: 0,
+  scan: 0,
+  done: 0,
   dawn: 0,
   marker: 0,
   tail: 0,

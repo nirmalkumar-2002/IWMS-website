@@ -150,8 +150,8 @@ test.describe('cinematic', () => {
     const sectionHeight = await hero.evaluate(
       (el) => el.getBoundingClientRect().height,
     );
-    // Scene 01 + Scene 02 (1400vh) + Phase 3.1 collection (450vh) = 1850vh.
-    expect(Math.abs(sectionHeight - viewport * 18.5)).toBeLessThanOrEqual(4);
+    // Scene 01 + Scene 02 (1400vh) + Phase 3.1–3.2 collection (380vh) = 1780vh.
+    expect(Math.abs(sectionHeight - viewport * 17.8)).toBeLessThanOrEqual(4);
 
     // Intro (~9.5 s) reveals the title by ~8 s; allow margin.
     await page.waitForTimeout(11_000);

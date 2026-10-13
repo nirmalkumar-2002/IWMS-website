@@ -4,10 +4,10 @@
   height: 100vh;
   background: var(--night-950);
 }
-/* Scene 01 (≈600vh of scroll) + Scene 02 city entry (≈700vh) + Phase 3.1 collection (≈450vh)
-   on one timeline (≈50vh per timeline unit). */
+/* Scene 01 (≈600vh of scroll) + Scene 02 city entry (≈700vh) + household collection & QR
+   verification (≈380vh) on one timeline (≈50vh per timeline unit). */
 .hero--cinematic {
-  height: 1850vh;
+  height: 1780vh;
 }
 .hero__stage {
   position: sticky;
@@ -127,8 +127,9 @@
   }
 }
 
-/* Phase 3.1 digital layer: world-anchored markers + IWMS monitor. Positions/opacity are written
-   per frame by CollectionDirector; nothing here animates on a clock except two ambient pulses. */
+/* Phase 3.1–3.2 digital layer: the H-12 marker and QR scan frame are world-anchored (written per
+   frame by CollectionDirector); everything else sits in one IWMS monitor. Nothing animates on a
+   clock except the vehicle dot's pulse, which only runs while the layer is live. */
 .hero__collect {
   --signal: #a6dcc8;
   --signal-dim: rgba(166, 220, 200, 0.42);
@@ -147,73 +148,28 @@
   height: 100%;
   overflow: visible;
 }
-.hero__route-line,
-.hero__route-glow {
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.hero__route-line {
-  stroke: var(--signal);
-  stroke-width: 2;
-}
-.hero__route-glow {
-  stroke: rgba(166, 220, 200, 0.16);
-  stroke-width: 9;
-}
-.hero__route-done {
-  fill: none;
-  stroke: var(--signal-dim);
-  stroke-width: 1.5;
-  stroke-dasharray: 2 5;
-}
-.hero__route-head {
-  fill: var(--signal);
-  stroke: rgba(10, 15, 28, 0.6);
-  stroke-width: 1;
-}
+
+/* Collection point marker: amber while pending, mint once verified/completed. */
 .hero__collect-ring {
-  fill: rgba(10, 15, 28, 0.35);
-  stroke: var(--signal);
+  fill: rgba(255, 165, 38, 0.18);
+  stroke: var(--point);
   stroke-width: 1.5;
 }
-[data-status='current'] > .hero__collect-ring {
-  stroke: var(--point);
-  fill: rgba(255, 165, 38, 0.18);
-}
-[data-status='collected'] > .hero__collect-ring {
-  stroke: var(--signal-dim);
-}
-.hero__collect-stem,
-.hero__gps-stem {
-  stroke: rgba(232, 237, 245, 0.55);
+.hero__collect-stem {
+  stroke: rgba(255, 165, 38, 0.8);
   stroke-width: 1;
 }
-[data-status='current'] > .hero__collect-stem {
-  stroke: rgba(255, 165, 38, 0.8);
-}
-.hero__link {
-  fill: none;
+.hero__collect-point:not([data-state='pending']) .hero__collect-ring {
+  fill: rgba(166, 220, 200, 0.2);
   stroke: var(--signal);
-  stroke-width: 1.25;
-  stroke-dasharray: 2 6;
-  animation: hero-link-flow 1.6s linear infinite paused;
 }
-/* Ambient loops run only while the layer is live (never during Scenes 01–02). */
-.hero__collect[data-live='true'] .hero__link,
-.hero__collect[data-live='true'] .hero__gps-live {
-  animation-play-state: running;
-}
-@keyframes hero-link-flow {
-  to {
-    stroke-dashoffset: -16;
-  }
+.hero__collect-point:not([data-state='pending']) .hero__collect-stem {
+  stroke: var(--signal-dim);
 }
 
-/* World-anchored labels: the element sits on its anchor's head point (0×0 box); children are
-   stacked upward from it and centred, so the anchor is the bottom-centre of the label. */
+/* World-anchored labels: a 0×0 box on the anchor; children stack upward, centred on it. */
 .hero__collect-marker,
-.hero__gps {
+.hero__scan-check {
   position: absolute;
   left: 0;
   top: 0;
@@ -222,78 +178,157 @@
   opacity: 0;
   will-change: transform, opacity;
 }
-.hero__collect-marker > span,
-.hero__gps > span {
+.hero__collect-marker > span {
   position: absolute;
   left: 0;
   bottom: 6px;
   translate: -50% 0;
   white-space: nowrap;
 }
-.hero__collect-code,
-.hero__gps-head {
+.hero__collect-code {
   padding: 0.2rem 0.45rem;
-  border: 1px solid var(--signal-dim);
+  border: 1px solid rgba(255, 165, 38, 0.75);
   border-radius: 3px;
   background: rgba(10, 15, 28, 0.64);
-  font-size: 0.66rem;
+  color: #ffd9a0;
+  font-size: 0.74rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   font-variant-numeric: tabular-nums;
 }
-.hero__collect-marker[data-status='current'] .hero__collect-code {
-  border-color: rgba(255, 165, 38, 0.75);
-  color: #ffd9a0;
-  font-size: 0.74rem;
-}
-.hero__collect-kind,
-.hero__gps-fix,
-.hero__gps-speed {
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
-}
 .hero__collect-marker > .hero__collect-kind {
-  bottom: calc(6px + 1.75rem);
+  bottom: calc(6px + 1.8rem);
   font-size: 0.6rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--text-muted);
-}
-.hero__collect-marker[data-status='current'] .hero__collect-kind {
   color: #ffd9a0;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
 }
-.hero__gps > .hero__gps-head {
-  bottom: calc(6px + 2.3rem);
+.hero__collect-marker:not([data-state='pending']) .hero__collect-code {
+  border-color: var(--signal-dim);
+  color: var(--text-light);
 }
-.hero__gps > .hero__gps-fix {
-  bottom: calc(6px + 1.15rem);
-  font-size: 0.64rem;
-  letter-spacing: 0.04em;
-  font-variant-numeric: tabular-nums;
+.hero__collect-marker:not([data-state='pending']) .hero__collect-kind {
   color: var(--text-muted);
-}
-.hero__gps-speed {
-  font-size: 0.6rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--signal);
-}
-.hero__gps-live {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: 0.4rem;
-  border-radius: 50%;
-  background: var(--signal);
-  vertical-align: 0.08em;
-  animation: hero-live 2.4s ease-in-out infinite paused;
-}
-@keyframes hero-live {
-  50% {
-    opacity: 0.35;
-  }
 }
 
-/* Story steps, top-left like the other scene copy. */
+/* QR scan: corner brackets on the bin's tag (inside the phone viewfinder), a sweep, a check. */
+.hero__scan-frame {
+  fill: none;
+  stroke: rgba(232, 237, 245, 0.92);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.hero__scan[data-verified='true'] .hero__scan-frame {
+  stroke: var(--signal);
+}
+.hero__scan-line {
+  stroke: var(--signal);
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 4px rgba(166, 220, 200, 0.6));
+}
+.hero__scan-check svg {
+  position: absolute;
+  left: -22px;
+  top: -22px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(10, 15, 28, 0.72);
+  box-shadow: 0 0 0 1.5px var(--signal);
+}
+.hero__scan-check path {
+  fill: none;
+  stroke: var(--signal);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Field app on the collector's phone: a device frame whose screen is the live scene (the bin's
+   QR is at frame centre in the close-up), with the app bar and a status sheet. No hands. */
+.hero__phone {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  /* Scales with the viewport like the scene, so the tag always fits the viewfinder. */
+  height: 74vh;
+  aspect-ratio: 9 / 19;
+  max-width: 82vw;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+.hero__phone-screen {
+  position: absolute;
+  inset: 0;
+  border: 11px solid #0c0e11;
+  border-radius: 40px;
+  box-shadow:
+    0 0 0 1px rgba(232, 237, 245, 0.16),
+    0 30px 80px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+.hero__phone-bar {
+  display: flex;
+  justify-content: space-between;
+  padding: 1.6rem 1rem 0.7rem;
+  background: linear-gradient(rgba(10, 15, 28, 0.85), rgba(10, 15, 28, 0.55));
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+.hero__phone-bar::before {
+  content: '';
+  position: absolute;
+  top: 0.55rem;
+  left: 50%;
+  width: 32%;
+  height: 0.55rem;
+  translate: -50% 0;
+  border-radius: 1rem;
+  background: #0c0e11;
+}
+.hero__phone-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0.9rem 1rem 1.3rem;
+  background: rgba(10, 15, 28, 0.82);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-size: 0.8rem;
+}
+.hero__phone-sheet p {
+  display: none;
+  margin: 0;
+}
+.hero__phone[data-state='align'] [data-when='align'],
+.hero__phone[data-state='scanning'] [data-when='scanning'],
+.hero__phone[data-state='verified'] [data-when='verified'] {
+  display: block;
+}
+.hero__phone [data-when='align'] {
+  color: var(--text-muted);
+}
+.hero__phone [data-when='scanning'] {
+  color: var(--text-light);
+}
+.hero__phone [data-when='verified'] strong {
+  display: block;
+  color: var(--signal);
+  font-weight: 600;
+}
+.hero__phone [data-when='verified'] small {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+/* Scene copy, top-left like the other scenes. */
 .hero__collect-copy {
   position: absolute;
   top: 12vh;
@@ -317,46 +352,17 @@
   line-height: 1.22;
   letter-spacing: 0.02em;
 }
-.hero__collect-steps {
-  display: grid;
-  gap: 0.45rem;
-  margin: 1.3rem 0 0;
-  padding: 0;
-  list-style: none;
-  font-size: clamp(0.78rem, 0.9vw, 0.92rem);
-}
-.hero__collect-steps li {
-  display: flex;
-  align-items: baseline;
-  gap: 0.7rem;
-  color: rgba(232, 237, 245, 0.42);
-  transition: color 0.4s ease;
-}
-.hero__collect-step-n {
-  font-size: 0.66rem;
-  letter-spacing: 0.1em;
-  font-variant-numeric: tabular-nums;
-}
-.hero__collect-steps li[data-state='done'] {
-  color: var(--text-muted);
-}
-.hero__collect-steps li[data-state='active'] {
-  color: var(--text-light);
-}
-.hero__collect-steps li[data-state='active'] .hero__collect-step-n {
-  color: var(--signal);
-}
 
-/* IWMS monitor: a quiet glass card, clearly labelled as demo data. */
+/* IWMS collection monitor: one quiet glass card, clearly labelled as demo data. */
 .hero__monitor {
   position: absolute;
-  top: 14vh;
+  top: 12vh;
   right: 4vw;
-  width: min(19rem, 30vw);
+  width: min(19.5rem, 30vw);
   padding: 0.95rem 1.05rem 1rem;
   border: 1px solid rgba(232, 237, 245, 0.14);
   border-radius: 8px;
-  background: rgba(10, 15, 28, 0.66);
+  background: rgba(10, 15, 28, 0.7);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
@@ -387,10 +393,67 @@
   text-transform: uppercase;
   color: #ffc77a;
 }
+.hero__map {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 68 / 23;
+  margin: 0.75rem 0 0.2rem;
+  border-radius: 4px;
+  background: rgba(232, 237, 245, 0.04);
+}
+.hero__map-street {
+  fill: rgba(232, 237, 245, 0.08);
+}
+.hero__map-done {
+  fill: none;
+  stroke: var(--signal-dim);
+  stroke-width: 0.5;
+  stroke-dasharray: 1 1.4;
+}
+.hero__map-route {
+  fill: none;
+  stroke: var(--signal);
+  stroke-width: 0.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  /* Drawn by CollectionDirector via the stroke-dashoffset attribute (1 → 0 with rig.route). */
+  stroke-dasharray: 1 1;
+}
+.hero__map-point {
+  fill: rgba(10, 15, 28, 0.8);
+  stroke: var(--signal);
+  stroke-width: 0.45;
+  opacity: 0;
+}
+.hero__map-point[data-status='collected'] {
+  stroke: var(--signal-dim);
+}
+.hero__map-point[data-status='current'] {
+  fill: rgba(255, 165, 38, 0.3);
+  stroke: var(--point);
+}
+.hero__map-point[data-status='current']:not([data-state='pending']) {
+  fill: rgba(166, 220, 200, 0.35);
+  stroke: var(--signal);
+}
+.hero__map-vehicle {
+  fill: var(--text-light);
+  stroke: rgba(10, 15, 28, 0.9);
+  stroke-width: 0.4;
+}
+.hero__collect[data-live='true'] .hero__map-vehicle {
+  animation: hero-live 2.4s ease-in-out infinite;
+}
+@keyframes hero-live {
+  50% {
+    opacity: 0.45;
+  }
+}
 .hero__monitor-rows {
   display: grid;
-  gap: 0.55rem;
-  margin: 0.75rem 0 0;
+  gap: 0.5rem;
+  margin: 0.6rem 0 0;
   font-size: 0.78rem;
 }
 .hero__monitor-rows > div {
@@ -406,14 +469,6 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.hero__monitor-rows em {
-  margin-left: 0.35rem;
-  font-style: normal;
-  color: var(--signal);
-}
-.hero__monitor-rows em.hero__monitor-arrived {
-  color: #ffd9a0;
-}
 .hero__monitor-bar {
   display: block;
   width: 7.5rem;
@@ -427,8 +482,97 @@
   background: var(--signal);
   transform-origin: left center;
 }
+.hero__monitor-sub {
+  margin: 0.85rem 0 0.4rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid rgba(232, 237, 245, 0.1);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
 
-/* Portrait: steps up top, monitor across the bottom (links attach to its top edge). */
+/* The three household states are distinct: arrival (GPS) ≠ QR verified ≠ completed. */
+.hero__states {
+  display: grid;
+  gap: 0.42rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.78rem;
+}
+.hero__states li {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding-left: 1.1rem;
+  color: rgba(232, 237, 245, 0.42);
+}
+.hero__states li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.38em;
+  width: 7px;
+  height: 7px;
+  border: 1px solid rgba(232, 237, 245, 0.35);
+  border-radius: 50%;
+}
+.hero__states time {
+  font-variant-numeric: tabular-nums;
+  /* Opacity, not visibility: a visible child would show through the hidden layer root. */
+  opacity: 0;
+}
+.hero__states li[data-state='done'] {
+  color: var(--text-light);
+}
+.hero__states li[data-state='done']::before {
+  border-color: var(--signal);
+  background: var(--signal);
+}
+.hero__states li[data-state='done'] time {
+  opacity: 1;
+  color: var(--text-muted);
+}
+.hero__states-awaiting {
+  display: none;
+  font-style: normal;
+}
+/* The verification row names the step until it is done, then states the result. */
+.hero__states-done,
+.hero__states li[data-state='done'] .hero__states-todo {
+  display: none;
+}
+.hero__states li[data-state='done'] .hero__states-done {
+  display: inline;
+}
+.hero__states li[data-state='awaiting'] {
+  color: #ffd9a0;
+}
+.hero__states li[data-state='awaiting']::before {
+  border-color: var(--point);
+}
+.hero__states li[data-state='awaiting'] .hero__states-awaiting {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.68rem;
+  color: rgba(255, 217, 160, 0.75);
+}
+.hero__monitor-next {
+  margin: 0.8rem 0 0;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  opacity: 0;
+}
+.hero__monitor-next strong {
+  color: var(--text-light);
+  font-weight: 600;
+}
+
+/* Portrait: copy below the badge, monitor across the bottom (map folded away for space). */
 @media (max-aspect-ratio: 4/5) {
   .hero__collect-copy {
     top: 4.8rem;
@@ -436,28 +580,34 @@
     right: 6vw;
     max-width: none;
   }
-  .hero__collect-steps {
-    grid-template-columns: 1fr 1fr;
-    gap: 0.3rem 1rem;
-    margin-top: 0.8rem;
-  }
   .hero__monitor {
     top: auto;
-    bottom: 4.5rem;
+    bottom: 1.5rem;
     left: 6vw;
     right: 6vw;
     width: auto;
+    padding: 0.75rem 0.9rem 0.8rem;
+  }
+  .hero__map {
+    display: none;
+  }
+  .hero__phone {
+    height: 62vh;
+  }
+  /* While the phone is up, it carries the scan state; the monitor returns with the logged result. */
+  .hero__collect[data-phone='true'] .hero__monitor,
+  .hero__collect[data-phone='true'] .hero__collect-copy {
+    opacity: 0 !important;
   }
   /* The stage is 100lvh: stay above the browser toolbar while it is showing. */
   @supports (height: 100svh) {
     .hero__monitor {
-      bottom: calc(4.5rem + 100lvh - 100svh);
+      bottom: calc(1.5rem + 100lvh - 100svh);
     }
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .hero__link,
-  .hero__gps-live {
+  .hero__collect[data-live='true'] .hero__map-vehicle {
     animation: none;
   }
 }

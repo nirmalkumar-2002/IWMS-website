@@ -6,87 +6,89 @@ import {
   COLLECTION_POINTS,
   CURRENT_POINT,
   DEMO,
-  GPS_ANCHOR,
+  MAP,
   MARKER_HEAD_Y,
-  POINT_HEAD_Y,
+  QR_TAG,
   ROUTE_AHEAD,
+  SCAN_BIN,
   ROUTE_DONE,
   cumulative,
+  mapPoints,
+  mapStreet,
   revealAt,
+  toMap,
 } from './collection';
 import type { Rig } from './rig';
 import { WHEELBASE, driveAt, samplePath, type DriveState, type PathSample } from './route';
 
 /**
- * Phase 3.1 digital layer: world-anchored HTML/SVG over the canvas. React renders the DOM once;
- * a useFrame driver inside the Canvas projects every anchor with the camera of the frame being
- * drawn and writes transforms/opacity imperatively (no React updates while scrolling). Every
- * output is a pure function of the rig and the camera, so scrubbing replays exactly.
+ * Phase 3.1–3.2 digital layer over the canvas. Two world-anchored elements only: the H-12
+ * collection-point marker and the scan brackets on the wet bin's QR tag, seen through a phone
+ * viewfinder (a device frame whose screen is the live scene). Everything else (GPS, route,
+ * nearby points, the three household states) lives in one IWMS monitor panel.
+ *
+ * React renders the DOM once; a useFrame driver inside the Canvas projects the anchors with the
+ * camera of the frame being drawn and writes styles/attributes imperatively (no React updates
+ * while scrolling). Every output is a pure function of the rig and the camera, so scrubbing
+ * replays exactly.
  */
 
 type Screen = { x: number; y: number; visible: boolean };
+type Anchor = { id: string; world: [number, number, number] };
 
 export interface CollectionHud {
   root: HTMLDivElement | null;
-  routeLine: SVGPathElement | null;
-  routeGlow: SVGPathElement | null;
-  routeDone: SVGPathElement | null;
-  routeHead: SVGCircleElement | null;
-  gpsStem: SVGLineElement | null;
-  gps: HTMLDivElement | null;
-  gpsSpeed: HTMLElement | null;
-  /** Fix + speed lines: shown at the kerb, folded away in the systems view (the monitor has them). */
-  gpsDetail: (HTMLElement | null)[];
-  links: (SVGPathElement | null)[];
-  monitor: HTMLElement | null;
+  marker: { group: SVGGElement | null; stem: SVGLineElement | null; ring: SVGCircleElement | null; label: HTMLDivElement | null };
+  scan: {
+    group: SVGGElement | null;
+    frame: SVGPathElement | null;
+    line: SVGLineElement | null;
+    check: HTMLDivElement | null;
+  };
+  /** Field app on a phone: frame + status sheet (align → scanning → verified). */
+  phone: HTMLDivElement | null;
   copy: HTMLElement | null;
-  steps: (HTMLElement | null)[];
-  points: {
-    label: HTMLDivElement | null;
-    stem: SVGLineElement | null;
-    ring: SVGCircleElement | null;
-  }[];
-  /** Monitor panel attachment point (CSS px, stage space), measured on resize. */
-  panelAnchor: { x: number; y: number };
+  monitor: HTMLElement | null;
+  vehicleState: HTMLElement | null;
+  served: HTMLElement | null;
+  servedBar: HTMLElement | null;
+  next: HTMLElement | null;
+  states: (HTMLElement | null)[];
+  map: {
+    ahead: SVGPolylineElement | null;
+    vehicle: SVGCircleElement | null;
+    points: (SVGCircleElement | null)[];
+  };
   /** Last written screen positions and opacities, by anchor id (for QA via `?debug`). */
   rendered: Record<string, { x: number; y: number; opacity: number }>;
   /** World anchors by id, for QA to project independently. */
-  anchors: () => { id: string; world: [number, number, number] }[];
+  anchors: () => Anchor[];
 }
 
 const points = COLLECTION_POINTS;
+const TAG_CENTRE: Anchor['world'] = [QR_TAG.x, QR_TAG.y, QR_TAG.z];
+const ANCHORS: Anchor[] = [
+  { id: CURRENT_POINT.id, world: [CURRENT_POINT.x, MARKER_HEAD_Y, CURRENT_POINT.z] },
+  { id: 'qr', world: TAG_CENTRE },
+];
 
 export function createCollectionHud(): CollectionHud {
   return {
     root: null,
-    routeLine: null,
-    routeGlow: null,
-    routeDone: null,
-    routeHead: null,
-    gpsStem: null,
-    gps: null,
-    gpsSpeed: null,
-    gpsDetail: [null, null],
-    links: [null, null],
-    monitor: null,
+    marker: { group: null, stem: null, ring: null, label: null },
+    scan: { group: null, frame: null, line: null, check: null },
+    phone: null,
     copy: null,
-    steps: [],
-    points: points.map(() => ({ label: null, stem: null, ring: null })),
-    panelAnchor: { x: 0, y: 0 },
+    monitor: null,
+    vehicleState: null,
+    served: null,
+    servedBar: null,
+    next: null,
+    states: [null, null, null],
+    map: { ahead: null, vehicle: null, points: points.map(() => null) },
     rendered: {},
-    anchors: () => [], // replaced by the driver once it knows the rig
+    anchors: () => ANCHORS,
   };
-}
-
-/** GPS tag anchor in world space (truck roof, above the cab), from the pure route maths. */
-function gpsWorld(driveSec: number, drive: DriveState, rear: PathSample, out: Vector3) {
-  const d = driveAt(driveSec, drive).distance;
-  samplePath(d - WHEELBASE, rear);
-  const hx = Math.cos(rear.yaw);
-  const hz = Math.sin(rear.yaw);
-  const fx = rear.x + hx * WHEELBASE;
-  const fz = rear.z + hz * WHEELBASE;
-  return out.set(fx + hx * GPS_ANCHOR.x, GPS_ANCHOR.y, fz + hz * GPS_ANCHOR.x);
 }
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -95,150 +97,156 @@ const r1 = (v: number) => Math.round(v * 10) / 10;
 /** The DOM half. Rendered once (outside the Canvas); fills `hud` with element handles. */
 export function CollectionHudView({ hud }: { hud: CollectionHud }) {
   const c = heroContent.collect;
-
-  // Measure where the link lines attach to the monitor panel (layout, not transforms).
-  useEffect(() => {
-    const root = hud.root;
-    const panel = hud.monitor;
-    if (!root || !panel) return;
-    // Same query as the portrait rule in hero.css that moves the panel to the bottom.
-    const portrait = window.matchMedia('(max-aspect-ratio: 4/5)');
-    const measure = () => {
-      const below = portrait.matches;
-      hud.panelAnchor = below
-        ? { x: panel.offsetLeft + panel.offsetWidth / 2, y: panel.offsetTop }
-        : { x: panel.offsetLeft, y: panel.offsetTop + Math.min(46, panel.offsetHeight / 2) };
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(root);
-    ro.observe(panel);
-    portrait.addEventListener('change', measure);
-    return () => {
-      ro.disconnect();
-      portrait.removeEventListener('change', measure);
-    };
-  }, [hud]);
-
+  const m = c.monitor;
+  const t = DEMO.times;
   return (
     <div className="hero__collect" ref={(el) => void (hud.root = el)} style={{ visibility: 'hidden' }}>
       <svg className="hero__collect-svg" aria-hidden="true">
-        <path className="hero__route-done" ref={(el) => void (hud.routeDone = el)} />
-        <path className="hero__route-glow" ref={(el) => void (hud.routeGlow = el)} />
-        <path className="hero__route-line" ref={(el) => void (hud.routeLine = el)} />
-        <circle className="hero__route-head" r={3.5} ref={(el) => void (hud.routeHead = el)} />
-        {points.map((p, i) => (
-          <g key={p.id} data-status={p.status}>
-            <line
-              className="hero__collect-stem"
-              ref={(el) => void (hud.points[i].stem = el)}
-            />
-            <circle
-              className="hero__collect-ring"
-              r={p.status === 'current' ? 5 : 3.5}
-              ref={(el) => void (hud.points[i].ring = el)}
-            />
-          </g>
-        ))}
-        <line className="hero__gps-stem" ref={(el) => void (hud.gpsStem = el)} />
-        <path className="hero__link" ref={(el) => void (hud.links[0] = el)} />
-        <path className="hero__link" ref={(el) => void (hud.links[1] = el)} />
+        <g className="hero__collect-point" ref={(el) => void (hud.marker.group = el)}>
+          <line className="hero__collect-stem" ref={(el) => void (hud.marker.stem = el)} />
+          <circle className="hero__collect-ring" r={5} ref={(el) => void (hud.marker.ring = el)} />
+        </g>
+        <g className="hero__scan" ref={(el) => void (hud.scan.group = el)}>
+          <path className="hero__scan-frame" ref={(el) => void (hud.scan.frame = el)} />
+          <line className="hero__scan-line" ref={(el) => void (hud.scan.line = el)} />
+        </g>
       </svg>
 
-      {points.map((p, i) => (
-        <div
-          key={p.id}
-          className="hero__collect-marker"
-          data-id={p.id}
-          data-status={p.status}
-          aria-hidden="true"
-          ref={(el) => void (hud.points[i].label = el)}
-        >
-          <span className="hero__collect-code">{p.id}</span>
-          {p.status === 'current' && <span className="hero__collect-kind">{c.point.current}</span>}
-          {p.status === 'collected' && <span className="hero__collect-kind">{c.point.collected}</span>}
-        </div>
-      ))}
+      <div
+        className="hero__collect-marker"
+        data-id={CURRENT_POINT.id}
+        aria-hidden="true"
+        ref={(el) => void (hud.marker.label = el)}
+      >
+        <span className="hero__collect-kind">{c.point}</span>
+        <span className="hero__collect-code">{CURRENT_POINT.id}</span>
+      </div>
+      <div className="hero__scan-check" aria-hidden="true" ref={(el) => void (hud.scan.check = el)}>
+        <svg viewBox="0 0 24 24">
+          <path d="M6 12.5l4 4 8-9" />
+        </svg>
+      </div>
 
-      <div className="hero__gps" aria-hidden="true" ref={(el) => void (hud.gps = el)}>
-        <span className="hero__gps-head">
-          <i className="hero__gps-live" />
-          {DEMO.vehicle} · {c.gps.label}
-        </span>
-        <span className="hero__gps-fix" ref={(el) => void (hud.gpsDetail[0] = el)}>
-          {DEMO.gps}
-        </span>
-        <span
-          className="hero__gps-speed"
-          ref={(el) => {
-            hud.gpsSpeed = el;
-            hud.gpsDetail[1] = el;
-          }}
-        />
+      <div className="hero__phone" data-state="align" aria-hidden="true" ref={(el) => void (hud.phone = el)}>
+        <div className="hero__phone-screen">
+          <div className="hero__phone-bar">
+            <span>{c.phone.app}</span>
+            <span>{CURRENT_POINT.id}</span>
+          </div>
+          <div className="hero__phone-sheet">
+            <p data-when="align">{c.phone.align}</p>
+            <p data-when="scanning">{c.phone.scanning}</p>
+            <p data-when="verified">
+              <strong>{c.phone.verified}</strong>
+              <small>
+                {SCAN_BIN.id} · {c.phone.wet} · {c.monitor.household} {CURRENT_POINT.id}
+              </small>
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="hero__collect-copy" aria-hidden="true" ref={(el) => void (hud.copy = el)}>
         <p className="hero__collect-eyebrow">{c.eyebrow}</p>
         <h2 className="hero__collect-title">{c.title}</h2>
-        <ol className="hero__collect-steps">
-          {c.steps.map((step, i) => (
-            <li key={step} data-step={i + 1} ref={(el) => void (hud.steps[i] = el)}>
-              <span className="hero__collect-step-n">{String(i + 1).padStart(2, '0')}</span>
-              {step}
-            </li>
-          ))}
-        </ol>
       </div>
 
-      <aside
-        className="hero__monitor"
-        aria-label={c.monitor.title}
-        aria-hidden="true"
-        ref={(el) => void (hud.monitor = el)}
-      >
+      <aside className="hero__monitor" aria-label={m.title} aria-hidden="true" ref={(el) => void (hud.monitor = el)}>
         <header className="hero__monitor-head">
-          <span className="hero__monitor-title">{c.monitor.title}</span>
-          <span className="hero__monitor-demo">{c.monitor.demo}</span>
+          <span className="hero__monitor-title">{m.title}</span>
+          <span className="hero__monitor-demo">{m.demo}</span>
         </header>
+
+        <svg
+          className="hero__map"
+          viewBox={`${MAP.x} ${MAP.y} ${MAP.width} ${MAP.height}`}
+          preserveAspectRatio="xMidYMid meet"
+          aria-hidden="true"
+        >
+          <rect className="hero__map-street" {...mapStreet.street} />
+          <rect className="hero__map-street" {...mapStreet.cross} />
+          <polyline className="hero__map-done" points={mapPoints(ROUTE_DONE)} />
+          <polyline
+            className="hero__map-route"
+            points={mapPoints(ROUTE_AHEAD)}
+            pathLength={1}
+            strokeDashoffset={1}
+            ref={(el) => void (hud.map.ahead = el)}
+          />
+          {points.map((p, i) => {
+            const [x, y] = toMap(p.x, p.z);
+            return (
+              <circle
+                key={p.id}
+                className="hero__map-point"
+                data-id={p.id}
+                data-status={p.status}
+                cx={x}
+                cy={y}
+                r={p.status === 'current' ? 1.6 : 1.1}
+                ref={(el) => void (hud.map.points[i] = el)}
+              />
+            );
+          })}
+          <circle className="hero__map-vehicle" r={1.3} ref={(el) => void (hud.map.vehicle = el)} />
+        </svg>
+
         <dl className="hero__monitor-rows">
           <div>
-            <dt>{c.monitor.vehicle}</dt>
+            <dt>{m.vehicle}</dt>
             <dd>
-              {DEMO.vehicle} <em>{c.monitor.vehicleState}</em>
+              {DEMO.vehicle} · <span ref={(el) => void (hud.vehicleState = el)} />
             </dd>
           </div>
           <div>
-            <dt>{c.monitor.route}</dt>
+            <dt>{m.route}</dt>
             <dd>{DEMO.route}</dd>
           </div>
           <div>
-            <dt>{c.monitor.stop}</dt>
+            <dt>{m.served}</dt>
             <dd>
-              {CURRENT_POINT.id} <em className="hero__monitor-arrived">{c.monitor.stopState}</em>
-            </dd>
-          </div>
-          <div>
-            <dt>{c.monitor.progress}</dt>
-            <dd>
-              {DEMO.served} / {DEMO.households}
+              <span ref={(el) => void (hud.served = el)}>{DEMO.served}</span> / {DEMO.households}
               <span className="hero__monitor-bar" aria-hidden="true">
-                <span style={{ transform: `scaleX(${DEMO.served / DEMO.households})` }} />
+                <span
+                  ref={(el) => void (hud.servedBar = el)}
+                  style={{ transform: `scaleX(${DEMO.served / DEMO.households})` }}
+                />
               </span>
             </dd>
           </div>
-          <div>
-            <dt>{c.monitor.next}</dt>
-            <dd>
-              {DEMO.next.id} · {DEMO.next.metres} m
-            </dd>
-          </div>
         </dl>
+
+        <p className="hero__monitor-sub">
+          {m.household} {CURRENT_POINT.id}
+        </p>
+        <ol className="hero__states">
+          <li data-state="pending" ref={(el) => void (hud.states[0] = el)}>
+            <span>{m.states.arrived}</span>
+            <time>{t.arrived}</time>
+          </li>
+          <li data-state="pending" ref={(el) => void (hud.states[1] = el)}>
+            <span>
+              <span className="hero__states-todo">{m.states.verify}</span>
+              <span className="hero__states-done">{m.states.verified}</span>
+              <em className="hero__states-awaiting">{m.states.awaiting}</em>
+            </span>
+            <time>{t.verified}</time>
+          </li>
+          <li data-state="pending" ref={(el) => void (hud.states[2] = el)}>
+            <span>{m.states.completed}</span>
+            <time>{t.completed}</time>
+          </li>
+        </ol>
+
+        <p className="hero__monitor-next" ref={(el) => void (hud.next = el)}>
+          {m.next} <strong>{DEMO.next.id}</strong> · {DEMO.next.metres} m
+        </p>
       </aside>
     </div>
   );
 }
 
-/** Writes a style/attribute only when its value changes (avoids per-frame style recalcs). */
+/** Writes a style/attribute only when its value changes (avoids redundant style recalcs). */
 function writer() {
   const last = new WeakMap<Element, Record<string, string>>();
   const changed = (el: Element, key: string, value: string) => {
@@ -267,48 +275,33 @@ export function CollectionDirector({ rig, hud }: { rig: Rig; hud: CollectionHud 
     const aheadLength = cumulative(ROUTE_AHEAD);
     return {
       v: new Vector3(),
-      gps: new Vector3(),
       drive: {} as DriveState,
       rear: {} as PathSample,
-      head: { x: 0, y: 0, visible: false } as Screen,
       ground: { x: 0, y: 0, visible: false } as Screen,
-      gpsScreen: { x: 0, y: 0, visible: false } as Screen,
-      pinScreen: { x: 0, y: 0, visible: false } as Screen,
-      aheadLength,
+      head: { x: 0, y: 0, visible: false } as Screen,
+      centre: { x: 0, y: 0, visible: false } as Screen,
+      corners: [0, 1, 2, 3].map(() => ({ x: 0, y: 0, visible: false }) as Screen),
       reveal: points.map((p) => revealAt(p, aheadLength)),
       w: writer(),
       // The root renders hidden; the first active frame must reveal it.
       shown: false,
-      tipVisible: false,
-      reached: [false, false, false, false],
-      from: [] as Screen[],
+      // Same query as the portrait rules in hero.css (monitor/copy step aside for the phone).
+      portrait: window.matchMedia('(max-aspect-ratio: 4/5)'),
     };
   }, []);
 
-  useEffect(() => {
-    hud.anchors = () => {
-      const g = gpsWorld(rig.driveSec, s.drive, s.rear, new Vector3());
-      return [
-        ...points.map((p) => ({
-          id: p.id,
-          world: [p.x, p.status === 'current' ? MARKER_HEAD_Y : POINT_HEAD_Y, p.z] as [
-            number,
-            number,
-            number,
-          ],
-        })),
-        { id: 'gps', world: [g.x, g.y, g.z] as [number, number, number] },
-      ];
-    };
-  }, [hud, rig, s]);
+  useEffect(() => () => void (hud.rendered = {}), [hud]);
 
   useFrame((state) => {
     const { w } = s;
-    const active = rig.pin > 0 || rig.gps > 0 || rig.route > 0 || rig.net > 0;
+    const active =
+      rig.pin > 0 || rig.net > 0 || rig.gps > 0 || rig.route > 0 || rig.scan > 0 || rig.done > 0;
     if (!active) {
       if (s.shown) {
         w.style(hud.root, 'visibility', 'hidden');
         w.attr(hud.root, 'data-live', 'false');
+        // Leave nothing stale in the hidden DOM: it reflects 'nothing logged' until shown again.
+        for (const el of hud.states) w.attr(el, 'data-state', 'pending');
         for (const r of Object.values(hud.rendered)) r.opacity = 0;
         s.shown = false;
       }
@@ -316,7 +309,7 @@ export function CollectionDirector({ rig, hud }: { rig: Rig; hud: CollectionHud 
     }
     if (!s.shown) {
       w.style(hud.root, 'visibility', 'visible');
-      // Ambient CSS loops (GPS dot, link flow) only run while the layer is live.
+      // Ambient CSS loops only run while the layer is live.
       w.attr(hud.root, 'data-live', 'true');
       s.shown = true;
     }
@@ -334,134 +327,140 @@ export function CollectionDirector({ rig, hud }: { rig: Rig; hud: CollectionHud 
       out.y = (-v.y * 0.5 + 0.5) * H;
       return out;
     };
-    const place = (el: HTMLElement | null, id: string, p: Screen, opacity: number) => {
-      const o = p.visible ? opacity : 0;
-      w.style(el, 'transform', `translate3d(${r1(p.x)}px, ${r1(p.y)}px, 0)`);
-      w.style(el, 'opacity', o.toFixed(3));
+    const record = (id: string, p: Screen, opacity: number) => {
       const rec = (hud.rendered[id] ??= { x: 0, y: 0, opacity: 0 });
       rec.x = r1(p.x);
       rec.y = r1(p.y);
-      rec.opacity = o;
+      rec.opacity = p.visible ? opacity : 0;
     };
-    const line = (el: SVGLineElement | null, a: Screen, b: Screen, opacity: number) => {
-      w.attr(el, 'x1', `${r1(a.x)}`);
-      w.attr(el, 'y1', `${r1(a.y)}`);
-      w.attr(el, 'x2', `${r1(b.x)}`);
-      w.attr(el, 'y2', `${r1(b.y)}`);
-      w.style(el, 'opacity', (a.visible && b.visible ? opacity : 0).toFixed(3));
+    const place = (el: HTMLElement | null, p: Screen, opacity: number) => {
+      w.style(el, 'transform', `translate3d(${r1(p.x)}px, ${r1(p.y)}px, 0)`);
+      w.style(el, 'opacity', (p.visible ? opacity : 0).toFixed(3));
     };
 
-    // Collection points: ground ring + stem + label head.
-    points.forEach((p, i) => {
-      const el = hud.points[i];
-      const current = p.status === 'current';
-      const k = current
-        ? rig.pin
-        : clamp01((rig.route - s.reveal[i]) / 0.08) * (p.status === 'collected' ? 0.6 : 1);
-      project(p.x, 0.05, p.z, s.ground);
-      project(p.x, current ? MARKER_HEAD_Y : POINT_HEAD_Y, p.z, s.head);
-      place(el.label, p.id, s.head, k);
-      line(el.stem, s.ground, s.head, k * 0.8);
-      w.attr(el.ring, 'cx', `${r1(s.ground.x)}`);
-      w.attr(el.ring, 'cy', `${r1(s.ground.y)}`);
-      w.style(el.ring, 'opacity', (s.ground.visible ? k : 0).toFixed(3));
-      if (current) Object.assign(s.pinScreen, s.head);
-    });
+    const u = rig.collectU;
+    const verified = rig.scan >= 0.95;
+    // Completion is a separate, later state and can never precede verification.
+    const completed = verified && rig.done >= 0.5;
+    const household = completed ? 'completed' : verified ? 'verified' : 'pending';
 
-    // Vehicle GPS tag above the cab, with a live speed read-out from the kinematics table.
-    gpsWorld(rig.driveSec, s.drive, s.rear, s.gps);
-    project(s.gps.x, s.gps.y, s.gps.z, s.gpsScreen);
-    place(hud.gps, 'gps', s.gpsScreen, rig.gps);
-    const detail = (1 - clamp01((rig.collectU - 0.55) / 0.2)).toFixed(3);
-    for (const el of hud.gpsDetail) w.style(el, 'opacity', detail);
-    project(s.gps.x, 3.55, s.gps.z, s.ground);
-    line(hud.gpsStem, s.ground, s.gpsScreen, rig.gps * 0.7);
-    const kmh = Math.round(s.drive.speed * 3.6);
-    const c = heroContent.collect.gps;
-    w.text(hud.gpsSpeed, s.drive.speed < 0.05 ? c.stopped : `${kmh} ${c.moving}`);
+    // H-12 marker: identifies the gate; steps aside for the QR close-up, returns after it.
+    const closeup = clamp01((u - 0.53) / 0.07) * (1 - clamp01((u - 0.88) / 0.07));
+    const markerK = rig.pin * (1 - closeup);
+    const p = CURRENT_POINT;
+    project(p.x, 0.05, p.z, s.ground);
+    project(p.x, MARKER_HEAD_Y, p.z, s.head);
+    // Label, stem and ring share one visibility rule (both ends in front of the camera).
+    const markerVisible = s.ground.visible && s.head.visible;
+    s.head.visible = markerVisible;
+    place(hud.marker.label, s.head, markerK);
+    record(p.id, s.head, markerK);
+    const mk = (markerVisible ? markerK : 0).toFixed(3);
+    w.attr(hud.marker.stem, 'x1', `${r1(s.ground.x)}`);
+    w.attr(hud.marker.stem, 'y1', `${r1(s.ground.y)}`);
+    w.attr(hud.marker.stem, 'x2', `${r1(s.head.x)}`);
+    w.attr(hud.marker.stem, 'y2', `${r1(s.head.y)}`);
+    w.attr(hud.marker.ring, 'cx', `${r1(s.ground.x)}`);
+    w.attr(hud.marker.ring, 'cy', `${r1(s.ground.y)}`);
+    w.style(hud.marker.group, 'opacity', mk);
+    w.attr(hud.marker.group, 'data-state', household);
+    w.attr(hud.marker.label, 'data-state', household);
 
-    // Planned route ahead, drawn to `route` of its real (world) length; driven route behind.
-    if (rig.route > 0) {
-      const target = rig.route * s.aheadLength[s.aheadLength.length - 1];
-      let d = '';
-      let tip = false;
-      for (let i = 0; i < ROUTE_AHEAD.length; i++) {
-        let [x, z] = ROUTE_AHEAD[i];
-        const end = s.aheadLength[i] >= target;
-        if (end && i > 0) {
-          const [px, pz] = ROUTE_AHEAD[i - 1];
-          const seg = s.aheadLength[i] - s.aheadLength[i - 1];
-          const k = seg > 0 ? (target - s.aheadLength[i - 1]) / seg : 1;
-          x = px + (x - px) * k;
-          z = pz + (z - pz) * k;
-        }
-        const p = project(x, 0.06, z, s.head);
-        if (p.visible) d += `${d ? 'L' : 'M'}${r1(p.x)} ${r1(p.y)}`;
-        if (end || i === ROUTE_AHEAD.length - 1) {
-          // The leading dot sits on the real tip, or hides if that is behind the camera.
-          tip = p.visible;
-          if (tip) {
-            w.attr(hud.routeHead, 'cx', `${r1(p.x)}`);
-            w.attr(hud.routeHead, 'cy', `${r1(p.y)}`);
-          }
-          break;
-        }
-      }
-      w.attr(hud.routeLine, 'd', d);
-      w.attr(hud.routeGlow, 'd', d);
-      s.tipVisible = tip;
-      let done = '';
-      for (const [x, z] of ROUTE_DONE) {
-        const p = project(x, 0.06, z, s.ground);
-        if (p.visible) done += `${done ? 'L' : 'M'}${r1(p.x)} ${r1(p.y)}`;
-      }
-      w.attr(hud.routeDone, 'd', done);
-    }
-    const ro = rig.route > 0 ? '1' : '0';
-    w.style(hud.routeLine, 'opacity', ro);
-    w.style(hud.routeGlow, 'opacity', ro);
-    w.style(hud.routeHead, 'opacity', s.tipVisible ? tipOpacity(rig.route) : '0');
-    w.style(hud.routeDone, 'opacity', (rig.route * 0.55).toFixed(3));
-
-    // Links into IWMS: vehicle and collection point → monitor panel.
-    const a = hud.panelAnchor;
-    s.from[0] = s.gpsScreen;
-    s.from[1] = s.pinScreen;
-    hud.links.forEach((link, i) => {
-      const f = s.from[i];
-      if (rig.net <= 0 || !f.visible) {
-        w.style(link, 'opacity', '0');
-        return;
-      }
-      const dx = a.x - f.x;
-      w.attr(
-        link,
-        'd',
-        `M${r1(f.x)} ${r1(f.y)}C${r1(f.x + dx * 0.45)} ${r1(f.y)} ${r1(a.x - dx * 0.35)} ${r1(a.y)} ${r1(a.x)} ${r1(a.y)}`,
-      );
-      w.style(link, 'opacity', (rig.net * 0.8).toFixed(3));
-    });
-    w.style(hud.monitor, 'opacity', rig.net.toFixed(3));
-    w.attr(hud.monitor, 'aria-hidden', rig.net >= 0.5 ? 'false' : 'true');
-    w.attr(hud.copy, 'aria-hidden', rig.pin >= 0.5 ? 'false' : 'true');
-    w.style(hud.monitor, 'transform', `translate3d(0, ${r1((1 - rig.net) * 14)}px, 0)`);
-
-    // Story steps: Physical Collection → GPS Tracking → Connected Points → IWMS Monitoring.
-    w.style(hud.copy, 'opacity', clamp01(rig.pin * 1.4).toFixed(3));
-    const reached = s.reached;
-    reached[0] = rig.pin >= 0.5;
-    reached[1] = rig.gps >= 0.5;
-    reached[2] = rig.route >= 0.5;
-    reached[3] = rig.net >= 0.5;
-    const step = reached.lastIndexOf(true);
-    hud.steps.forEach((el, i) =>
-      w.attr(el, 'data-state', i < step ? 'done' : i === step ? 'active' : 'pending'),
+    // Phone: rises into view on the push-in to the bin, leaves on the pull-back.
+    const phoneK = clamp01((u - 0.6) / 0.12) * (1 - clamp01((u - 0.79) / 0.07));
+    w.style(hud.phone, 'opacity', clamp01(phoneK * 1.6).toFixed(3));
+    w.style(
+      hud.phone,
+      'transform',
+      `translate(-50%, calc(-50% + ${r1((1 - phoneK) * 0.55 * H)}px))`,
     );
+    w.attr(hud.phone, 'data-state', verified ? 'verified' : rig.scan > 0 ? 'scanning' : 'align');
+    // Portrait has no room for phone + monitor + copy at once (CSS steps the others aside).
+    const phoneUp = phoneK > 0.3;
+    w.attr(hud.root, 'data-phone', phoneUp ? 'true' : 'false');
+    const asideForPhone = phoneUp && s.portrait.matches;
+
+    // Scan brackets on the bin's QR tag (inside the viewfinder), a sweep while scanning, a check
+    // once verified.
+    const frameK = clamp01((u - 0.68) / 0.06) * (1 - clamp01((u - 0.79) / 0.05));
+    const half = (QR_TAG.size / 2) * 1.22;
+    const [tl, tr, br, bl] = s.corners;
+    project(QR_TAG.x, QR_TAG.y + half, QR_TAG.z - half, tl);
+    project(QR_TAG.x, QR_TAG.y + half, QR_TAG.z + half, tr);
+    project(QR_TAG.x, QR_TAG.y - half, QR_TAG.z + half, br);
+    project(QR_TAG.x, QR_TAG.y - half, QR_TAG.z - half, bl);
+    project(...TAG_CENTRE, s.centre);
+    const allVisible = tl.visible && tr.visible && br.visible && bl.visible;
+    const fk = allVisible ? frameK : 0;
+    record('qr', s.centre, fk);
+    if (fk > 0) {
+      let d = '';
+      const ring = s.corners;
+      for (let i = 0; i < 4; i++) {
+        const c = ring[i];
+        const a = ring[(i + 3) % 4];
+        const b = ring[(i + 1) % 4];
+        const k = 0.22;
+        d += `M${r1(c.x + (a.x - c.x) * k)} ${r1(c.y + (a.y - c.y) * k)}L${r1(c.x)} ${r1(c.y)}L${r1(c.x + (b.x - c.x) * k)} ${r1(c.y + (b.y - c.y) * k)}`;
+      }
+      w.attr(hud.scan.frame, 'd', d);
+      // Sweep top → bottom across the tag while scanning.
+      const t = clamp01(rig.scan / 0.92);
+      w.attr(hud.scan.line, 'x1', `${r1(tl.x + (bl.x - tl.x) * t)}`);
+      w.attr(hud.scan.line, 'y1', `${r1(tl.y + (bl.y - tl.y) * t)}`);
+      w.attr(hud.scan.line, 'x2', `${r1(tr.x + (br.x - tr.x) * t)}`);
+      w.attr(hud.scan.line, 'y2', `${r1(tr.y + (br.y - tr.y) * t)}`);
+      // The check only once actually verified.
+      place(hud.scan.check, s.centre, verified ? fk * clamp01((rig.scan - 0.95) / 0.05) : 0);
+    } else {
+      w.style(hud.scan.check, 'opacity', '0');
+    }
+    w.style(hud.scan.group, 'opacity', fk.toFixed(3));
+    w.style(hud.scan.line, 'opacity', rig.scan > 0 && !verified ? '1' : '0');
+    w.attr(hud.scan.group, 'data-verified', verified ? 'true' : 'false');
+
+    // IWMS monitor: GPS (vehicle row + map dot), route, and the three distinct household states.
+    w.style(hud.monitor, 'opacity', rig.net.toFixed(3));
+    w.style(hud.monitor, 'transform', `translate3d(0, ${r1((1 - rig.net) * 14)}px, 0)`);
+    w.attr(hud.monitor, 'aria-hidden', rig.net >= 0.5 && !asideForPhone ? 'false' : 'true');
+    const m = heroContent.collect.monitor;
+    const d = driveAt(rig.driveSec, s.drive);
+    w.text(
+      hud.vehicleState,
+      d.speed < 0.05 ? m.stopped : `${Math.round(d.speed * 3.6)} ${m.moving}`,
+    );
+    samplePath(d.distance - WHEELBASE, s.rear);
+    const [vx, vy] = toMap(
+      s.rear.x + Math.cos(s.rear.yaw) * WHEELBASE,
+      s.rear.z + Math.sin(s.rear.yaw) * WHEELBASE,
+    );
+    w.attr(hud.map.vehicle, 'cx', vx.toFixed(2));
+    w.attr(hud.map.vehicle, 'cy', vy.toFixed(2));
+    w.attr(hud.map.ahead, 'stroke-dashoffset', (1 - rig.route).toFixed(4));
+    // Hidden until drawing starts: a zero-length dash can still paint a round cap.
+    w.style(hud.map.ahead, 'opacity', rig.route > 0 ? '1' : '0');
+    points.forEach((pt, i) => {
+      const el = hud.map.points[i];
+      const k = pt.status === 'current' ? 1 : clamp01((rig.route - s.reveal[i]) / 0.08);
+      w.style(el, 'opacity', k.toFixed(3));
+      if (pt.status === 'current') w.attr(el, 'data-state', household);
+    });
+    w.attr(hud.states[0], 'data-state', rig.gps >= 0.5 ? 'done' : 'pending');
+    w.attr(
+      hud.states[1],
+      'data-state',
+      verified ? 'done' : rig.gps >= 0.5 ? 'awaiting' : 'pending',
+    );
+    w.attr(hud.states[2], 'data-state', completed ? 'done' : 'pending');
+    const served = DEMO.served + (completed ? 1 : 0);
+    w.text(hud.served, `${served}`);
+    w.style(hud.servedBar, 'transform', `scaleX(${(served / DEMO.households).toFixed(4)})`);
+    w.style(hud.next, 'opacity', clamp01((rig.done - 0.5) / 0.5).toFixed(3));
+
+    // The headline steps aside for the phone close-up (it would sit over the bins and the device).
+    w.style(hud.copy, 'opacity', (clamp01(rig.pin * 1.4) * (1 - clamp01(phoneK * 1.6))).toFixed(3));
+    w.attr(hud.copy, 'aria-hidden', rig.pin >= 0.5 && !phoneUp ? 'false' : 'true');
   });
 
   return null;
 }
-
-/** The route's leading dot fades once the whole route is drawn. */
-const tipOpacity = (route: number) =>
-  (route <= 0 ? 0 : route < 0.9 ? 1 : Math.max(0, (1 - route) / 0.1)).toFixed(3);

@@ -2,8 +2,9 @@ import { CatmullRomCurve3, Vector3 } from 'three';
 import { COLLECTION_GATE, RESIDENTIAL } from './route';
 
 /**
- * Phase 3.1: smart collection & digital connectivity. Pure data + geometry shared by the
- * timeline, the Director (camera) and the collection overlay. No React, no per-frame state.
+ * Phase 3.1–3.2: household collection, GPS/route connectivity and QR verification. Pure data +
+ * geometry shared by the timeline, the Director (camera), the waste bins and the collection overlay.
+ * No React, no per-frame state.
  *
  * Everything shown in the digital layer is ILLUSTRATIVE DEMO DATA (labelled as such on screen):
  * ids, counts and coordinates do not come from a live IWMS deployment.
@@ -45,18 +46,62 @@ export const CURRENT_POINT = COLLECTION_POINTS.find((p) => p.status === 'current
 export const DEMO = {
   vehicle: 'IWMS-07',
   route: 'R-14 · Ward 7',
-  /** Display-only GPS fix (demo). */
-  gps: '12.9716° N  77.5946° E',
+  /** Households served before H-12; becomes served + 1 only once H-12's collection is completed. */
   served: 11,
   households: 24,
   next: { id: 'H-13', metres: Math.round(153.446 - COLLECTION_GATE.z) },
+  /** Event times for the three distinct H-12 states (illustrative). */
+  times: { arrived: '07:41', verified: '07:42', completed: '07:43' },
 };
 
-/** Marker heights: label head above the compound wall (1.8 m), and the truck's GPS tag over the cab. */
+/** Collection-point marker head, above the compound wall (1.8 m). */
 export const MARKER_HEAD_Y = 2.7;
-export const POINT_HEAD_Y = 2.2;
-/** GPS tag anchor in the truck's local frame (x forward from the front axle, y up). */
-export const GPS_ANCHOR = { x: -1.6, y: 4.1 };
+
+/**
+ * Household waste bins (Phase 3.2) on the kerbside strip in front of plot 12's compound wall,
+ * just left of the H-12 gate's near pillar (frontage z 136.01–147.86, opening 140.88–143.88,
+ * pillar 140.53–140.88), clear of the parked truck (rear end ≈ z 143.6). Two ~120 L wheelie bins
+ * in India's segregation colours, fronts facing the street (−X), wheels and handle to the wall.
+ * Each carries a printed front label with an illustrative QR tag; the WET bin is the one scanned.
+ */
+export const BIN = {
+  /** The kerbside verge's drain-cover slabs (city/layout.ts) top out at y 0.07: bins stand on them. */
+  baseY: 0.07,
+  /** Body footprint at the base (x depth, z width) and height; the body widens ~6 % to the top. */
+  depth: 0.52,
+  width: 0.46,
+  bodyY0: 0.04,
+  bodyH: 0.84,
+  taper: 1.06,
+  lidH: 0.05,
+  /** Front label (printed sticker): size and centre height above the base; QR square centred on it. */
+  label: { width: 0.3, height: 0.4, y: 0.55 },
+  qrSize: 0.22,
+};
+const BIN_X = COLLECTION_GATE.x - 0.06 - (BIN.depth / 2) * BIN.taper;
+export interface Bin {
+  id: string;
+  kind: 'wet' | 'dry';
+  /** Base centre (world). */
+  x: number;
+  z: number;
+}
+export const BINS: Bin[] = [
+  { id: 'BIN-0712-W', kind: 'wet', x: BIN_X, z: 140.02 },
+  { id: 'BIN-0712-D', kind: 'dry', x: BIN_X, z: 139.4 },
+];
+/** Front-face x of a bin body at height y above its base (the body tapers outward toward the top). */
+export const binFrontX = (bin: Bin, y: number) =>
+  bin.x -
+  (BIN.depth / 2) * (1 + (BIN.taper - 1) * Math.min(1, Math.max(0, (y - BIN.bodyY0) / BIN.bodyH)));
+/** The QR tag that is scanned: centre of the WET bin's label QR square, just proud of the face. */
+export const SCAN_BIN = BINS[0];
+export const QR_TAG = {
+  x: binFrontX(SCAN_BIN, BIN.label.y) - 0.006,
+  y: BIN.baseY + BIN.label.y,
+  z: SCAN_BIN.z,
+  size: BIN.qrSize,
+};
 
 /* Camera ---------------------------------------------------------------------------------- */
 
@@ -70,18 +115,29 @@ export interface CollectShot {
 }
 
 /**
- * Phase 3.1 keys, sampled by `rig.collectU` at i / (n − 1). The first key is Scene 02's
- * `arrive` exactly, so the hand-over has no pop. Truck-local +z is the street centre (the truck
- * keeps left): every camera position stays within local z ∈ [0, 3], i.e. over the carriageway
- * between the compound walls (world x within axisX ± 1.5). Targets may look toward the kerb (−z).
+ * Collection keys, sampled by `rig.collectU` at i / (n − 1). The first key is Scene 02's
+ * `arrive` exactly, so the hand-over has no pop. All keys are truck-local, so they read in world
+ * terms only once the truck is at rest (front axle at gate.z + 9.5): there, local x = z − 151.88
+ * and local z = −(x − (axisX + 1.5)). Kerbside is −z. The camera leaves the truck: it turns to the
+ * household, closes in on the wet bin's QR tag, then settles on a medium household frame.
+ * Positions stay over the carriageway and clear of the parked truck (rear end ≈ local x −8.3).
  */
 export const COLLECT_SHOTS: CollectShot[] = [
   { id: 'arrive', pos: [-15, 5.6, 0.6], target: [16, 1.2, 1.0], focal: 28 },
-  // Kerbside read: behind the truck over the centre line, the plot-12 gate just beyond the hopper.
-  { id: 'kerb', pos: [-22, 3.4, 2.4], target: [-5, 1.4, -1.6], focal: 32 },
-  // Systems view: high over the street so the route, nearby gates and the truck read as one network.
-  { id: 'network', pos: [-30, 17, 2.5], target: [10, 0, -1.5], focal: 24 },
+  // Descend and pan off the truck toward the kerbside homes as it rolls to a stop.
+  { id: 'turn', pos: [-15, 3.2, 2.2], target: [-6, 1.6, -3.0], focal: 30 },
+  // Eye level across the street: the H-12 gate with its wet/dry bins; the truck only at frame edge.
+  { id: 'household', pos: [-16, 1.65, 2.6], target: [-11.4, 0.9, -2.4], focal: 30 },
+  // Close-up on the wet bin's QR tag (≈1.9 m, from the lane behind the truck) at hand-held phone
+  // height, looking slightly down; the phone viewfinder frames the tag with bin and wall around it.
+  { id: 'qr', pos: [-12.05, 1.0, 0.0], target: [-11.86, 0.62, -1.89], focal: 40 },
+  // Confirmation: a medium household frame — gate, bins and house together.
+  { id: 'confirm', pos: [-15.4, 1.45, 1.9], target: [-11.0, 0.95, -2.6], focal: 30 },
 ];
+/** collectU at which each key is reached. */
+export const SHOT_U = Object.fromEntries(
+  COLLECT_SHOTS.map((s, i) => [s.id, i / (COLLECT_SHOTS.length - 1)]),
+) as Record<string, number>;
 
 export function createCollectCurves() {
   const curve = (pick: (s: CollectShot) => V3) =>
@@ -145,3 +201,22 @@ export function revealAt(p: CollectionPoint, aheadLength: number[]) {
   const i = ROUTE_AHEAD.findIndex(([, z]) => z >= p.z);
   return Math.min(0.9, Math.max(0.02, aheadLength[Math.max(0, i)] / total));
 }
+
+/* Monitor map ------------------------------------------------------------------------------ */
+
+/**
+ * Top-down schematic for the IWMS monitor's route map, in metres: map x = world z (along the
+ * street, driving direction to the right), map y = −(world x − axisX), so the kerbside (+X) is
+ * up and the left turn into the cross lane bends upward, as on a north-up route map.
+ */
+export const MAP = { x: 116, y: -17, width: 68, height: 23 };
+export const toMap = (x: number, z: number): [number, number] => [
+  z,
+  -(x - RESIDENTIAL.axisX),
+];
+export const mapStreet = {
+  street: { x: MAP.x, y: -RESIDENTIAL.width / 2, width: RES_END + 1 - MAP.x, height: RESIDENTIAL.width },
+  cross: { x: RES_END + 1, y: MAP.y, width: 6, height: MAP.height },
+};
+export const mapPoints = (pts: [number, number][]) =>
+  pts.map(([x, z]) => toMap(x, z).map((v) => v.toFixed(2)).join(',')).join(' ');

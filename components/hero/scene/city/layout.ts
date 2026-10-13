@@ -63,6 +63,9 @@ export interface StreetGate {
   /** +1 = east (+X, the truck's kerbside under left-hand traffic), −1 = west. */
   side: 1 | -1;
   plot: number;
+  /** The plot's street frontage (compound wall) along z. */
+  from: number;
+  to: number;
 }
 
 /** Distance from (x, z) to the truck's route (main road then residential street). */
@@ -555,7 +558,14 @@ function zoneD(c: Chunk, r: Rng, lamps: CityLamp[], gates: StreetGate[]) {
       const f = sign < 0 ? face(wallX, z + w, 1, 0) : face(wallX, z, -1, 0);
       const g0 = r.range(0.8, w - 4);
       // Record the gate centre (no extra RNG draws, so the generated street is unchanged).
-      gates.push({ x: wallX, z: sign > 0 ? z + g0 + 1.5 : z + w - g0 - 1.5, side: sign, plot });
+      gates.push({
+        x: wallX,
+        z: sign > 0 ? z + g0 + 1.5 : z + w - g0 - 1.5,
+        side: sign,
+        plot,
+        from: z,
+        to: z + w,
+      });
       compoundWall(c, f, w, {
         height: 1.8,
         grille: 0.3,

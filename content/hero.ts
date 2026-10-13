@@ -11,30 +11,40 @@ export const heroContent = {
     subtitle: 'GPS-enabled fleet tracking and optimized collection routes.',
   },
   /**
-   * Phase 3.1 copy (smart collection & digital connectivity). PROPOSED — not yet approved.
-   * The overlay's operational values are illustrative demo data and are labelled as such.
+   * Phase 3.1–3.2 copy (household collection & QR verification). PROPOSED — not yet approved.
+   * The monitor's operational values are illustrative demo data and are labelled as such.
    */
   collect: {
     eyebrow: 'Smart collection',
-    title: 'Every household on the route, connected.',
-    steps: [
-      'Physical collection',
-      'GPS tracking',
-      'Connected collection points',
-      'IWMS monitoring',
-    ],
-    point: { current: 'Collection point', scheduled: 'Scheduled', collected: 'Collected' },
-    gps: { label: 'GPS', moving: 'km/h', stopped: 'Stopped at collection point' },
+    title: 'Every household collection, verified.',
+    point: 'Collection point',
+    /** Field app on the collector's phone (no person is shown, only the device). */
+    phone: {
+      app: 'IWMS Collect',
+      align: 'Align the bin QR in the frame',
+      scanning: 'Scanning bin QR…',
+      verified: 'Bin QR verified',
+      wet: 'Wet waste',
+    },
     monitor: {
-      title: 'IWMS · Route monitor',
+      title: 'IWMS · Collection monitor',
       demo: 'Illustrative demo data',
       vehicle: 'Vehicle',
-      vehicleState: 'GPS locked',
+      moving: 'km/h',
+      stopped: 'Stationary',
       route: 'Route',
-      stop: 'Collection point',
-      stopState: 'Arrived',
-      progress: 'Households served',
+      served: 'Households served',
       next: 'Next point',
+      household: 'Household',
+      /** Three distinct states: GPS arrival is never verification; verification is not completion. */
+      states: {
+        arrived: 'Vehicle at household (GPS)',
+        awaiting: 'Awaiting scan',
+        verify: 'Bin QR verification',
+        verified: 'Bin QR verified',
+        completed: 'Collection completed',
+        pending: 'Pending',
+      },
     },
   },
 } as const;

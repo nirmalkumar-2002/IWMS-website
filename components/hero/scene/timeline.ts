@@ -2,7 +2,7 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
 import { SHOTS, shotU, type Rig } from './rig';
-import { COLLECT_SHOTS } from './collection';
+import { COLLECT_SHOTS, SHOT_U } from './collection';
 import {
   CITY_SHOTS,
   COLLECT_END_SEC,
@@ -100,6 +100,8 @@ export function buildReveal(rig: Rig, copy: CopyElements) {
       gps: 0,
       route: 0,
       net: 0,
+      scan: 0,
+      done: 0,
     },
     0,
   );
@@ -236,79 +238,73 @@ function addCityEntry(
   );
 }
 
-/** Scroll units for Phase 3.1 (≈50vh each, like the rest of the timeline). */
-const COLLECT_UNITS = 9;
+/** Scroll units for Phase 3.1–3.2 (≈50vh each, like the rest of the timeline). */
+const COLLECT_UNITS = 7.6;
 /**
  * Scene 02 ends with cityEase'(1) = 1, i.e. CITY_SPAN / CITY_UNITS simulated seconds per scroll
- * unit. Phase 3.1 keeps exactly that rate, so the truck's on-screen speed is continuous across
- * the hand-over and the deceleration in the kinematics table is what the visitor sees.
+ * unit. The collection drive keeps exactly that rate, so the truck's on-screen speed is continuous
+ * across the hand-over and the deceleration in the kinematics table is what the visitor sees.
  */
 const COLLECT_DRIVE = (COLLECT_END_SEC - JOURNEY_END_SEC) / (CITY_SPAN / CITY_UNITS);
 const COLLECT_STOP = (STOP_SEC - JOURNEY_END_SEC) / (CITY_SPAN / CITY_UNITS);
 
 /**
- * Phase 3.1 — smart collection & digital connectivity, on the same timeline after `city:arrive`.
- * Owns: driveSec (continued), collectU, focal, and the digital layer (pin, gps, route, net).
- * The story beats: physical collection (truck stops at the household gate, marker) → GPS
- * tracking (vehicle tag) → connected collection points (camera rises, route draws) → IWMS
- * monitoring (platform link + monitor panel). Every value is scrubbed, never time-based.
+ * Phase 3.1–3.2: household collection, on the same timeline after `city:arrive`.
+ * Owns: driveSec (continued), collectU, focal and the digital layer (pin, net, gps, route, scan,
+ * done). The camera leaves the truck for the household as it stops; the IWMS monitor logs three
+ * distinct states — vehicle arrived (GPS proximity), household QR verified, collection completed —
+ * each on its own beat. Every value is scrubbed, never time-based.
  */
 function addCollection(tl: gsap.core.Timeline, rig: Rig, start: number) {
-  const k = (id: string) => COLLECT_SHOTS.find((s) => s.id === id)!;
-  const kerbAt = start + Math.min(COLLECT_STOP + 0.2, 3.3);
-  const rise = start + 4.4;
-  tl.addLabel('collect', start)
-    .fromTo(
+  const shot = (id: string) => COLLECT_SHOTS.find((s) => s.id === id)!;
+  const camera = (from: string, to: string, at: number, duration: number, ease: string) =>
+    tl.fromTo(
       rig,
-      { driveSec: JOURNEY_END_SEC },
-      { driveSec: COLLECT_END_SEC, duration: COLLECT_DRIVE, ease: 'none', immediateRender: false },
-      start,
-    )
-    .addLabel('collect:stop', start + COLLECT_STOP)
-    // Camera: settle behind the truck as it rolls to the gate, then rise to the systems view.
-    .fromTo(
-      rig,
-      { collectU: 0, focal: k('arrive').focal },
-      {
-        collectU: 0.5,
-        focal: k('kerb').focal,
-        duration: kerbAt - start,
-        ease: 'sine.inOut',
-        immediateRender: false,
-      },
-      start,
-    )
-    .addLabel('collect:network', rise)
-    .fromTo(
-      rig,
-      { collectU: 0.5, focal: k('kerb').focal },
-      {
-        collectU: 1,
-        focal: k('network').focal,
-        duration: 2.4,
-        ease: 'sine.inOut',
-        immediateRender: false,
-      },
-      rise,
+      { collectU: SHOT_U[from], focal: shot(from).focal },
+      { collectU: SHOT_U[to], focal: shot(to).focal, duration, ease, immediateRender: false },
+      at,
     );
-  // Digital layer: identify the gate as the truck creeps up to it, then the vehicle's GPS fix,
-  // then the route and nearby points as the view opens, then the link into IWMS.
-  const reveal = (key: 'pin' | 'gps' | 'route' | 'net', at: number, duration: number) =>
+  const reveal = (key: CollectKey, at: number, duration: number) =>
     tl.fromTo(
       rig,
       { [key]: 0 },
       { [key]: 1, duration, ease: 'power1.inOut', immediateRender: false },
       at,
     );
-  // Both land while the truck is still creeping in, so the GPS tag reads its last km/h, then stops.
-  reveal('pin', start + COLLECT_STOP - 1.5, 0.9);
-  reveal('gps', start + COLLECT_STOP - 0.7, 0.8);
-  reveal('route', rise + 1.2, 1.8);
-  reveal('net', rise + 2.8, 1.2);
-  // Hold the finished frame for the remaining units, ready for Phase 3.2.
+  const stop = start + COLLECT_STOP;
+  const household = start + 3.4;
+  const qr = start + 5.1;
+
+  tl.addLabel('collect', start).fromTo(
+    rig,
+    { driveSec: JOURNEY_END_SEC },
+    { driveSec: COLLECT_END_SEC, duration: COLLECT_DRIVE, ease: 'none', immediateRender: false },
+    start,
+  );
+  tl.addLabel('collect:stop', stop);
+  // Off the truck: turn to the household while it rolls to a stop beside the gate.
+  camera('arrive', 'household', start, household - start, 'sine.inOut');
+  reveal('pin', start + 2.0, 0.8);
+  // The IWMS monitor comes up while the vehicle is still creeping in (live GPS speed) ...
+  reveal('net', start + 2.3, 0.7);
+  // ... and logs the arrival only once it is stationary. Arrival is not verification.
+  reveal('gps', stop - 0.07, 0.4);
+  tl.addLabel('collect:household', household);
+  reveal('route', household, 0.9);
+  // QR close-up, scan, verification.
+  camera('household', 'qr', household + 0.7, qr - household - 0.7, 'power2.inOut');
+  tl.addLabel('collect:qr', qr);
+  reveal('scan', qr, 0.9);
+  tl.addLabel('collect:verified', qr + 0.9);
+  // Pull back to the household; the collection is completed as a separate, later state.
+  camera('qr', 'confirm', qr + 1.1, 1.0, 'power2.inOut');
+  reveal('done', qr + 1.4, 0.5);
+  tl.addLabel('collect:completed', qr + 1.9);
   tl.addLabel('collect:end', start + COLLECT_UNITS);
   tl.to({}, { duration: 0.01 }, start + COLLECT_UNITS - 0.01);
 }
+
+type CollectKey = 'pin' | 'net' | 'gps' | 'route' | 'scan' | 'done';
 
 /**
  * Wires intro + reveal to the page. The intro never locks scrolling: if the visitor scrolls
