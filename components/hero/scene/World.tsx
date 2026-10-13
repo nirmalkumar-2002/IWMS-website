@@ -73,6 +73,8 @@ const skyFragment = /* glsl */ `
   uniform float uSunAmt;
   uniform float uSunWidth;
   uniform float uSunElev;
+  // Phase 3.4 visible disc (0 until the sun nears the horizon).
+  uniform float uSunDisc;
   varying vec3 vDir;
   void main() {
     vec3 d = normalize(vDir);
@@ -94,6 +96,20 @@ const skyFragment = /* glsl */ `
         + 0.5 * exp(-ang / 0.04) * smoothstep(radians(-1.0), radians(1.0), uSunElev));
       col += sunCol * smoothstep(-0.01, 0.03, h);
       col = min(col, vec3(0.95));
+      if (uSunDisc > 0.0) {
+        // Visible disc: ~0.85° across (≈1.6× the real sun, so it reads at these focal lengths),
+        // soft limb, clipped by the horizon line so it rises through it with the elevation.
+        // Angular distance via atan2(|d×s|, d·s): accurate at the disc's sub-degree scale.
+        float a = atan(length(cross(d, sunDir)), dot(d, sunDir));
+        float r = radians(0.42);
+        float disc = 1.0 - smoothstep(r - radians(0.1), r + radians(0.06), a);
+        float limb = 1.0 - 0.18 * smoothstep(0.0, r, a);
+        float horizonCut = smoothstep(-0.0012, 0.0012, h);
+        // Atmospheric extinction: deep orange while low (≤ 4°), warming to soft white by ~9°.
+        float lift = clamp((uSunElev - radians(4.0)) / radians(5.0), 0.0, 1.0);
+        vec3 discCol = mix(vec3(1.0, 0.5, 0.24), vec3(1.0, 0.9, 0.76), lift) * mix(1.15, 1.6, lift);
+        col = mix(col, discCol * limb, disc * horizonCut * uSunDisc);
+      }
     }
     // Blue-noise-ish dither keeps the long gradient free of banding.
     col += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 255.0;
@@ -125,6 +141,7 @@ function Sky({
           uSunAmt: { value: 0 },
           uSunWidth: { value: 6 },
           uSunElev: { value: (-6 * Math.PI) / 180 },
+          uSunDisc: { value: 0 },
         },
         vertexShader: skyVertex,
         fragmentShader: skyFragment,

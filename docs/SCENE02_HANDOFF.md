@@ -65,6 +65,24 @@ Here the truck faces +Z, so truck-local +z (its right) is world −X. That side 
   - Reflections still come from the environment baked at night; only its intensity is ramped.
   - City streetlight heads share a material with lit windows, so they dim to the window level (15%) rather than switching fully off.
 
+## Visible sun disc (Phase 3.4)
+
+- **Rendering.** The sky shader (`World.tsx`) draws a disc inside the existing sunrise branch, so Scene 01 is unchanged (`uSunAmt = 0` skips it).
+  - It is about 0.85° across, roughly 1.6× the real sun so it reads at these focal lengths, with a soft limb.
+  - Angular distance is computed as atan2(|d×s|, d·s).
+  - The horizon line clips it.
+  - Colour runs from deep orange while low (up to 4°) to warm white by about 9°.
+  - Brightness comes from the `sunDisc` row in `SUN_KEYS`, written by `SunDirector` as `uSunDisc`. It is uniform-only, so scrolling never recompiles a shader.
+- **Occlusion.** The dome draws first with no depth writes, so every opaque building, skyline block and the ground paints over the disc. Verified in renders: during the street-level city approach the sun (about 3–5° up) is always behind the city-entrance buildings or the distant skyline band, which covers the sky up to about 11° from the street.
+- **Where it is seen.** In the aerial establishing shot (labels `city:rise` → `city:establish`, timeline t ≈ 17.0–18.3).
+  - It emerges between the skyline towers at the right of the frame (t ≈ 17.2), then clears the skyline (t ≈ 17.7) before leaving frame.
+  - It is not in frame during the residential street or Phase 3; the camera there faces away from the sun's azimuth.
+- **Sky versus sunlight elevation.**
+  - `skyElevationDeg` (−6, −5, 5.5, 6, 6.5, 9) is the sun as seen in the sky, driving the glow and the disc.
+  - `elevationDeg` (−6, −5, −2.5, 0, 6.5, 9) is unchanged and still drives the sunlight direction and shadows (clamped ≥ 7° for the light).
+  - The two agree from progress 0.9 on, so late Scene 02 and Phase 3 are identical.
+  - The sky sun rises earlier than the light because at the street-level approach the disc can never clear the buildings. Approved as a sky-only change.
+
 ## Left-hand traffic conventions
 
 Every new path or shot in Phase 3 should follow these rules:

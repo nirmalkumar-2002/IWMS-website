@@ -76,7 +76,8 @@ export function SunDirector({
       if (sky.uSunDir) (sky.uSunDir.value as V3).copy(s.skyDir);
       if (sky.uSunAmt) sky.uSunAmt.value = sun > 0 ? s.sunGlowAmount : 0;
       if (sky.uSunWidth) sky.uSunWidth.value = s.sunGlowWidth;
-      if (sky.uSunElev) sky.uSunElev.value = (s.elevationDeg * Math.PI) / 180;
+      if (sky.uSunElev) sky.uSunElev.value = (s.skyElevationDeg * Math.PI) / 180;
+      if (sky.uSunDisc) sky.uSunDisc.value = sun > 0 ? s.sunDisc : 0;
     }
 
     // Atmosphere: the Director has set this frame's density from distance; tint and thin it.

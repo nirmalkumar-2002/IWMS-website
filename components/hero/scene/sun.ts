@@ -79,7 +79,20 @@ export const SUN_KEYS = {
   sunGlow: row('#6a4a52', '#6a4a52', '#c8875e', '#ffc58a', '#ffd8a8', '#ffdcb0'),
   sunGlowAmount: row(0, 0.18, 0.3, 0.6, 0.55, 0.5),
   sunGlowWidth: row(10, 10, 8, 6, 5, 5),
+  /**
+   * Phase 3.4 visible sun disc (brightness multiplier). Off until the sun nears the horizon;
+   * the sky shader's horizon cut makes it rise through the horizon line with `elevationDeg`.
+   */
+  sunDisc: row(0, 0, 1, 1, 1, 0.95),
+  /** Sunlight elevation: drives the light direction and shadows (unchanged since Phase 2.2). */
   elevationDeg: row(-6, -5, -2.5, 0, 6.5, 9),
+  /**
+   * Phase 3.4: elevation of the sun as SEEN in the sky (glow and disc) — the only value that
+   * moved. It clears the ~4.7° skyline at the sun's azimuth in the aerial establishing shot
+   * (sunlight stays on `elevationDeg`, clamped ≥ 7° for the light, so no lighting change), and
+   * rejoins `elevationDeg` from 0.9 so late Scene 02 and Phase 3 are identical.
+   */
+  skyElevationDeg: row(-6, -5, 5.5, 6, 6.5, 9),
   fog: row('#2a3650', '#313d57', '#414c66', '#737b90', '#9aa3b3', '#9ea7b6'),
   fogDensity: row(1, 1, 1, 1.05, 0.8, 0.75),
   hemiSky: row('#4a5f86', '#566b92', '#6f82a8', '#8fa3c6', '#a9bddb', '#a9bddb'),
@@ -108,6 +121,8 @@ export interface SunState {
   /** Light direction (elevation clamped ≥ 7° to avoid grazing acne/zero N·L). */
   lightDir: Vector3;
   elevationDeg: number;
+  /** Phase 3.4: elevation of the visible sun in the sky (glow/disc), degrees. */
+  skyElevationDeg: number;
   zenith: Color;
   mid: Color;
   horizon: Color;
@@ -115,6 +130,8 @@ export interface SunState {
   sunGlow: Color;
   sunGlowAmount: number;
   sunGlowWidth: number;
+  /** Visible disc brightness multiplier (0 = no disc). */
+  sunDisc: number;
   fog: Color;
   fogDensity: number;
   hemiSky: Color;
@@ -139,6 +156,7 @@ export const createSunState = (): SunState => ({
   skyDir: new Vector3(),
   lightDir: new Vector3(),
   elevationDeg: 0,
+  skyElevationDeg: 0,
   zenith: new Color(),
   mid: new Color(),
   horizon: new Color(),
@@ -146,6 +164,7 @@ export const createSunState = (): SunState => ({
   sunGlow: new Color(),
   sunGlowAmount: 0,
   sunGlowWidth: 0,
+  sunDisc: 0,
   fog: new Color(),
   fogDensity: 1,
   hemiSky: new Color(),
@@ -196,7 +215,8 @@ export function sampleSun(sun: number, out: SunState): SunState {
   const K = SUN_KEYS;
   out.progress = s;
   out.elevationDeg = num(K.elevationDeg, s);
-  const e = MathUtils.degToRad(out.elevationDeg);
+  out.skyElevationDeg = num(K.skyElevationDeg, s);
+  const e = MathUtils.degToRad(out.skyElevationDeg);
   out.skyDir.set(Math.cos(e) * Math.cos(AZIMUTH), Math.sin(e), Math.cos(e) * Math.sin(AZIMUTH));
   const le = MathUtils.degToRad(Math.max(out.elevationDeg, 4) + 3);
   out.lightDir.set(Math.cos(le) * Math.cos(AZIMUTH), Math.sin(le), Math.cos(le) * Math.sin(AZIMUTH));
@@ -207,6 +227,7 @@ export function sampleSun(sun: number, out: SunState): SunState {
   col(K.sunGlow, s, out.sunGlow);
   out.sunGlowAmount = num(K.sunGlowAmount, s);
   out.sunGlowWidth = num(K.sunGlowWidth, s);
+  out.sunDisc = num(K.sunDisc, s);
   col(K.fog, s, out.fog);
   out.fogDensity = num(K.fogDensity, s);
   col(K.hemiSky, s, out.hemiSky);
