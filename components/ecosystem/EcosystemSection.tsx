@@ -4,9 +4,9 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
-  type CSSProperties,
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
@@ -30,9 +30,14 @@ import './ecosystem.css';
 const EcosystemStage = lazy(() => import('./EcosystemStage'));
 
 type StageState = 'off' | 'wanted' | 'ready' | 'failed';
+/** A rectangle covered by UI overlaid on the slot (CSS px, relative to the slot's top-left). */
+type Obstacle = { x: number; y: number; w: number; h: number };
 
 /** Any failure of the lazy stage (chunk load, renderer creation, build) falls back to the schematic. */
-class StageBoundary extends Component<{ onError: () => void; children: ReactNode }, { failed: boolean }> {
+class StageBoundary extends Component<
+  { onError: () => void; children: ReactNode },
+  { failed: boolean }
+> {
   state = { failed: false };
   static getDerivedStateFromError() {
     return { failed: true };
@@ -49,15 +54,17 @@ const MODULES = ECOSYSTEM_NODES.filter((n) => n.kind === 'module');
 const INTEGRATIONS = ECOSYSTEM_NODES.filter((n) => n.kind === 'integration');
 /** Tab order: the seven modules, then the integration hub. */
 const ORDER = [...MODULES, ...INTEGRATIONS].map((n) => n.id);
-
-/** Viewports where the info card overlays the stage card (keep in sync with ecosystem.css). */
-const OVERLAY_MQ = '(min-width: 1100px)';
-/** Gap between the overlaid card and the area the city is framed in (CSS px). */
-const OVERLAY_GAP = 16;
+/** Highlights shown in the compact summary (the full list lives in the details). */
+const HIGHLIGHTS = 2;
+/** Marks UI overlaid on the slot; measured and passed to the stage as obstacles. */
+const OVERLAY_ATTR = 'data-eco-overlay';
+const NO_OBSTACLES: ReadonlyArray<Obstacle> = [];
 
 const tabId = (id: EcosystemNodeId) => `eco-tab-${id}`;
 const panelId = (id: EcosystemNodeId) => `eco-${id}`;
-const brochureHref = (page: number) => `${siteConfig.brochurePath}#page=${page}`;
+const detailsId = (id: EcosystemNodeId) => `eco-${id}-details`;
+const brochureHref = (page: number) =>
+  `${siteConfig.brochurePath}#page=${page}`;
 
 /** Simple 24px line icons for the capability cards (decorative). */
 function PillarIcon({ icon }: { icon: EcosystemPillar['icon'] }) {
@@ -106,25 +113,61 @@ function PillarIcon({ icon }: { icon: EcosystemPillar['icon'] }) {
   );
 }
 
+/** Small decorative 16px line icon. */
+function Glyph({ d, size = 14 }: { d: string; size?: number }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d={d} />
+    </svg>
+  );
+}
+const ICON_OVERVIEW = 'M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4';
+const ICON_CHEVRON = 'm4 6 4 4 4-4';
+const ICON_CLOSE = 'm4 4 8 8M12 4l-8 8';
+const ICON_TAP =
+  'M8 1.5v2M3.4 3.4l1.4 1.4M12.6 3.4l-1.4 1.4M8 7v7.5M5.5 11.5 8 14.5l2.5-3';
+
 /**
- * Scene 04 (M4): the IWMS ecosystem after the cinematic hero — centred header, module pills, one
- * large framed city view with a contextual info card, and four capability cards.
- * Progressive enhancement: the server/no-JS markup is a readable list of every module (with
- * in-page links); after hydration it becomes an accessible tab interface showing one card at a
- * time. The schematic map holds the slot until (and unless) the lazy 3D stage is ready.
+ * Scene 04 (M4.1): the IWMS ecosystem after the cinematic hero — centred header, module pills,
+ * one large city view, four capability cards. Progressive disclosure: the overview shows the
+ * whole city with only a small hint; selecting a module shows a compact summary (floating on the
+ * city ≥768px once the 3D stage is ready, below it otherwise) and "View details" expands the
+ * complete module information below the city in normal flow.
+ * Progressive enhancement: the server/no-JS markup is a readable list of every module, fully
+ * expanded, with in-page links; after hydration it becomes an accessible tab interface. The
+ * schematic map holds the slot until (and unless) the lazy 3D stage is ready.
  */
 export default function EcosystemSection() {
   const [enhanced, setEnhanced] = useState(false);
   const [selected, setSelected] = useState<EcosystemNodeId>('collection');
   const [focused, setFocused] = useState(false);
-  const tabs = useRef<Partial<Record<EcosystemNodeId, HTMLButtonElement | null>>>({});
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const tabs = useRef<
+    Partial<Record<EcosystemNodeId, HTMLButtonElement | null>>
+  >({});
+  const detailBtns = useRef<
+    Partial<Record<EcosystemNodeId, HTMLButtonElement | null>>
+  >({});
   const tablistRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
-  const cardRef = useRef<HTMLDivElement>(null);
-  const panelsRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<HTMLDivElement>(null);
+  const slotRef = useRef<HTMLDivElement>(null);
   const [stage, setStage] = useState<StageState>('off');
   const [tier, setTier] = useState<'high' | 'medium' | null>(null);
-  const [insetPx, setInsetPx] = useState(0);
+  const [obstacles, setObstacles] =
+    useState<ReadonlyArray<Obstacle>>(NO_OBSTACLES);
+  const obstacleKey = useRef('[]');
   useEffect(() => setEnhanced(true), []);
 
   // Load the 3D stage only for capable tiers, without reduced motion, and only once the section
@@ -142,7 +185,8 @@ export default function EcosystemSection() {
         setTier(q);
         // Mount in idle time so parsing/compiling never competes with a hero frame.
         const start = () => setStage((st) => (st === 'off' ? 'wanted' : st));
-        if ('requestIdleCallback' in window) window.requestIdleCallback(start, { timeout: 1500 });
+        if ('requestIdleCallback' in window)
+          window.requestIdleCallback(start, { timeout: 1500 });
         else setTimeout(start, 200);
       },
       { rootMargin: '100% 0px 100% 0px' },
@@ -150,36 +194,53 @@ export default function EcosystemSection() {
     io.observe(sectionRef.current);
     return () => io.disconnect();
   }, [enhanced]);
-  const onStageReady = useCallback(() => setStage((st) => (st === 'wanted' ? 'ready' : st)), []);
+  const onStageReady = useCallback(
+    () => setStage((st) => (st === 'wanted' ? 'ready' : st)),
+    [],
+  );
   const onStageLost = useCallback(() => setStage('failed'), []);
 
-  // Width the overlaid info card covers on the right of the stage (≥1100px only), so the city
-  // can be framed in the remaining area. Measured on layout changes only; state set on change.
-  useEffect(() => {
+  // Obstacles for the stage: every element marked as overlaid (hint chip, floating summary)
+  // that actually covers the slot, clipped to it, in integer CSS px relative to the slot. Only
+  // a real change produces a new array (the stage reframes on change).
+  useLayoutEffect(() => {
     if (!enhanced) return;
-    const card = cardRef.current;
-    const panels = panelsRef.current;
-    if (!card || !panels) return;
-    const mq = window.matchMedia(OVERLAY_MQ);
+    const view = viewRef.current;
+    const slot = slotRef.current;
+    if (!view || !slot) return;
+    const overlays = [
+      ...view.querySelectorAll<HTMLElement>(`[${OVERLAY_ATTR}]`),
+    ];
     const measure = () => {
-      let next = 0;
-      if (mq.matches) {
-        const cr = card.getBoundingClientRect();
-        const pr = panels.getBoundingClientRect();
-        next = Math.max(0, Math.round(cr.right - pr.left + OVERLAY_GAP));
+      const sr = slot.getBoundingClientRect();
+      const next: Obstacle[] = [];
+      for (const el of overlays) {
+        const r = el.getBoundingClientRect();
+        const x0 = Math.max(r.left, sr.left);
+        const y0 = Math.max(r.top, sr.top);
+        const x1 = Math.min(r.right, sr.right);
+        const y1 = Math.min(r.bottom, sr.bottom);
+        if (r.width === 0 || r.height === 0 || x1 <= x0 || y1 <= y0) continue;
+        const x = Math.floor(x0 - sr.left);
+        const y = Math.floor(y0 - sr.top);
+        next.push({
+          x,
+          y,
+          w: Math.ceil(x1 - sr.left) - x,
+          h: Math.ceil(y1 - sr.top) - y,
+        });
       }
-      setInsetPx((prev) => (prev === next ? prev : next));
+      const key = JSON.stringify(next);
+      if (key === obstacleKey.current) return;
+      obstacleKey.current = key;
+      setObstacles(next.length ? next : NO_OBSTACLES);
     };
     measure();
     const ro = new ResizeObserver(measure);
-    ro.observe(card);
-    ro.observe(panels);
-    mq.addEventListener('change', measure);
-    return () => {
-      ro.disconnect();
-      mq.removeEventListener('change', measure);
-    };
-  }, [enhanced]);
+    ro.observe(slot);
+    overlays.forEach((el) => ro.observe(el));
+    return () => ro.disconnect();
+  }, [enhanced, focused, selected, stage]);
 
   // Keep the selected pill visible in the horizontally scrolling (mobile) tab row without
   // scrolling the page itself.
@@ -190,7 +251,8 @@ export default function EcosystemSection() {
     const left = el.offsetLeft - list.offsetLeft;
     const right = left + el.offsetWidth;
     if (left < list.scrollLeft) list.scrollLeft = left - 16;
-    else if (right > list.scrollLeft + list.clientWidth) list.scrollLeft = right - list.clientWidth + 16;
+    else if (right > list.scrollLeft + list.clientWidth)
+      list.scrollLeft = right - list.clientWidth + 16;
   }, [selected, enhanced]);
 
   const select = useCallback((id: EcosystemNodeId, focus = false) => {
@@ -198,11 +260,39 @@ export default function EcosystemSection() {
     setFocused(true);
     if (focus) tabs.current[id]?.focus();
   }, []);
-  const onStageSelect = useCallback((id: EcosystemNodeId) => select(id), [select]);
+  const onStageSelect = useCallback(
+    (id: EcosystemNodeId) => select(id),
+    [select],
+  );
 
   const returnToOverview = () => {
     setFocused(false);
     tabs.current[selected]?.focus();
+  };
+
+  const toggleDetails = () => {
+    const open = !detailsOpen;
+    setDetailsOpen(open);
+    if (!open) return;
+    // User-initiated: if the newly expanded details end below the fold, scroll just enough to
+    // reveal them, never pushing their top under the fixed header (never on module selection).
+    requestAnimationFrame(() => {
+      const el = document.getElementById(detailsId(selected));
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const delta = Math.min(r.bottom - window.innerHeight + 24, r.top - 92);
+      if (delta <= 0) return;
+      const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)')
+        .matches;
+      window.scrollTo({
+        top: window.scrollY + delta,
+        behavior: smooth ? 'smooth' : 'auto',
+      });
+    });
+  };
+  const closeDetails = () => {
+    setDetailsOpen(false);
+    detailBtns.current[selected]?.focus();
   };
 
   // WAI-ARIA tabs with automatic activation; arrows work on both axes.
@@ -223,6 +313,9 @@ export default function EcosystemSection() {
     select(to, true);
   };
 
+  const ready = stage === 'ready';
+  /** The compact summary floats on the city (≥768px, see CSS) only over the live 3D stage. */
+  const floating = enhanced && ready && focused;
   const demo = demoRequestLink();
   const pillContent = (n: EcosystemNode) => (
     <>
@@ -254,6 +347,139 @@ export default function EcosystemSection() {
     </span>
   );
 
+  const card = (n: EcosystemNode) => {
+    const id = n.id;
+    const isSel = id === selected;
+    const hidden = enhanced && !isSel;
+    const showDetails = !enhanced || detailsOpen;
+    return (
+      <article
+        key={id}
+        id={panelId(id)}
+        className="eco__card"
+        data-kind={n.kind}
+        {...(enhanced
+          ? { role: 'tabpanel', 'aria-labelledby': tabId(id) }
+          : {})}
+        hidden={hidden}
+      >
+        <div
+          className="eco__summary"
+          {...(floating && isSel ? { [OVERLAY_ATTR]: '' } : {})}
+        >
+          <div className="eco__summary-main">
+            <p className="eco__card-tag">
+              {n.kind === 'module'
+                ? `${c.moduleTag} ${n.number}`
+                : c.integrationTag}
+              <span className="eco__card-place"> · {n.place}</span>
+            </p>
+            <h3 className="eco__card-title">{n.name}</h3>
+            {n.kind === 'integration' && (
+              <p className="eco__card-note">{c.integrationNote}</p>
+            )}
+            <p className="eco__card-summary">{n.summary}</p>
+          </div>
+          {enhanced && (
+            <div className="eco__summary-aside">
+              <ul className="eco__highlights" aria-label={s.highlightsLabel}>
+                {n.capabilities.slice(0, HIGHLIGHTS).map((cap) => (
+                  <li key={cap}>{cap}</li>
+                ))}
+              </ul>
+              <div className="eco__summary-actions">
+                <button
+                  type="button"
+                  ref={(el) => void (detailBtns.current[id] = el)}
+                  className="eco__details-btn"
+                  aria-expanded={detailsOpen}
+                  aria-controls={detailsId(id)}
+                  onClick={toggleDetails}
+                >
+                  {s.detailsLabel}
+                  <Glyph d={ICON_CHEVRON} />
+                </button>
+                {ready && focused && isSel && (
+                  <button
+                    type="button"
+                    className="eco__overview-btn"
+                    onClick={returnToOverview}
+                  >
+                    <Glyph d={ICON_OVERVIEW} />
+                    {s.overviewLabel}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div
+          id={detailsId(id)}
+          className="eco__details"
+          role={enhanced ? 'region' : undefined}
+          aria-label={enhanced ? `${s.detailsTitle}: ${n.name}` : undefined}
+          hidden={!showDetails}
+        >
+          {enhanced && (
+            <div className="eco__details-head">
+              <p className="eco__details-title">
+                {s.detailsTitle}
+                <span className="eco__details-name"> · {n.label}</span>
+              </p>
+              <button
+                type="button"
+                className="eco__close-btn"
+                aria-label={s.closeDetailsLabel(n.name)}
+                onClick={closeDetails}
+              >
+                <Glyph d={ICON_CLOSE} />
+                {s.closeLabel}
+              </button>
+            </div>
+          )}
+          <div className="eco__details-grid">
+            <div className="eco__card-body">
+              <h4 className="eco__card-sub">{c.capabilitiesLabel}</h4>
+              <ul className="eco__card-list">
+                {n.capabilities.map((cap) => (
+                  <li key={cap}>{cap}</li>
+                ))}
+              </ul>
+            </div>
+            <div className="eco__card-side">
+              <p className="eco__card-benefit">{n.benefit}</p>
+              <h4 className="eco__card-sub">{c.connectsLabel}</h4>
+              <ul className="eco__card-links">
+                {n.connects.map((to) => (
+                  <li key={to}>
+                    {enhanced ? (
+                      <button
+                        type="button"
+                        className="eco__link"
+                        aria-controls={panelId(to)}
+                        onClick={() => select(to, true)}
+                      >
+                        {ECOSYSTEM_BY_ID[to].label}
+                      </button>
+                    ) : (
+                      <a className="eco__link" href={`#${panelId(to)}`}>
+                        {ECOSYSTEM_BY_ID[to].label}
+                      </a>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <a className="eco__source" href={brochureHref(n.page)}>
+                {c.sourceLabel(n.page)}
+              </a>
+            </div>
+          </div>
+        </div>
+      </article>
+    );
+  };
+
   return (
     <section
       ref={sectionRef}
@@ -268,11 +494,16 @@ export default function EcosystemSection() {
           <h2 id="eco-title" className="eco__title">
             {c.title}
           </h2>
-          <p className="eco__lead">{c.intro}</p>
+          <p className="eco__lead">{s.lead}</p>
         </header>
 
         {enhanced ? (
-          <div ref={tablistRef} className="eco__tabs" role="tablist" aria-label={c.railLabel}>
+          <div
+            ref={tablistRef}
+            className="eco__tabs"
+            role="tablist"
+            aria-label={c.railLabel}
+          >
             {MODULES.map(tab)}
             {divider}
             {INTEGRATIONS.map(tab)}
@@ -282,7 +513,11 @@ export default function EcosystemSection() {
             <ul>
               {MODULES.map((n) => (
                 <li key={n.id}>
-                  <a className="eco__pill" data-kind={n.kind} href={`#${panelId(n.id)}`}>
+                  <a
+                    className="eco__pill"
+                    data-kind={n.kind}
+                    href={`#${panelId(n.id)}`}
+                  >
                     {pillContent(n)}
                   </a>
                 </li>
@@ -290,7 +525,11 @@ export default function EcosystemSection() {
               <li aria-hidden="true">{divider}</li>
               {INTEGRATIONS.map((n) => (
                 <li key={n.id}>
-                  <a className="eco__pill" data-kind={n.kind} href={`#${panelId(n.id)}`}>
+                  <a
+                    className="eco__pill"
+                    data-kind={n.kind}
+                    href={`#${panelId(n.id)}`}
+                  >
                     {pillContent(n)}
                   </a>
                 </li>
@@ -299,10 +538,18 @@ export default function EcosystemSection() {
           </nav>
         )}
 
-        <div className="eco__view" style={{ '--eco-inset': `${insetPx}px` } as CSSProperties}>
-          <div ref={cardRef} className="eco__stage-card">
-            <div className="eco__slot" data-stage={stage}>
-              <EcosystemMap selected={enhanced ? selected : null} onSelect={enhanced ? select : undefined} />
+        <div
+          ref={viewRef}
+          className="eco__view"
+          data-float={floating ? 'true' : 'false'}
+          data-details={enhanced && detailsOpen ? 'open' : 'closed'}
+        >
+          <div className="eco__stage-card">
+            <div ref={slotRef} className="eco__slot" data-stage={stage}>
+              <EcosystemMap
+                selected={enhanced ? selected : null}
+                onSelect={enhanced ? select : undefined}
+              />
               {tier && (stage === 'wanted' || stage === 'ready') && (
                 <StageBoundary onError={onStageLost}>
                   <Suspense fallback={null}>
@@ -310,7 +557,7 @@ export default function EcosystemSection() {
                       quality={tier}
                       selected={selected}
                       focused={focused}
-                      insetRight={insetPx}
+                      obstacles={obstacles}
                       onSelect={onStageSelect}
                       onReady={onStageReady}
                       onLost={onStageLost}
@@ -319,89 +566,16 @@ export default function EcosystemSection() {
                 </StageBoundary>
               )}
             </div>
-            {stage === 'ready' && focused && (
-              <button type="button" className="eco__overview-btn" onClick={returnToOverview}>
-                <svg
-                  viewBox="0 0 16 16"
-                  width="14"
-                  height="14"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                  focusable="false"
-                >
-                  <path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4" />
-                </svg>
-                {s.overviewLabel}
-              </button>
+            {enhanced && ready && !focused && (
+              <p className="eco__hint" {...{ [OVERLAY_ATTR]: '' }}>
+                <Glyph d={ICON_TAP} size={13} />
+                {s.hint}
+              </p>
             )}
           </div>
 
-          <div ref={panelsRef} className="eco__panels">
-            {ORDER.map((id) => {
-              const n = ECOSYSTEM_BY_ID[id];
-              const hidden = enhanced && id !== selected;
-              return (
-                <article
-                  key={id}
-                  id={panelId(id)}
-                  className="eco__card"
-                  data-kind={n.kind}
-                  {...(enhanced
-                    ? { role: 'tabpanel', 'aria-labelledby': tabId(id), tabIndex: 0 }
-                    : {})}
-                  hidden={hidden}
-                >
-                  <div className="eco__card-head">
-                    <p className="eco__card-tag">
-                      {n.kind === 'module' ? `${c.moduleTag} ${n.number}` : c.integrationTag}
-                      <span className="eco__card-place"> · {n.place}</span>
-                    </p>
-                    <h3 className="eco__card-title">{n.name}</h3>
-                    {n.kind === 'integration' && <p className="eco__card-note">{c.integrationNote}</p>}
-                    <p className="eco__card-summary">{n.summary}</p>
-                  </div>
-                  <div className="eco__card-body">
-                    <h4 className="eco__card-sub">{c.capabilitiesLabel}</h4>
-                    <ul className="eco__card-list">
-                      {n.capabilities.map((cap) => (
-                        <li key={cap}>{cap}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div className="eco__card-side">
-                    <p className="eco__card-benefit">{n.benefit}</p>
-                    <span className="eco__card-sub">{c.connectsLabel}</span>
-                    <ul className="eco__card-links">
-                      {n.connects.map((to) => (
-                        <li key={to}>
-                          {enhanced ? (
-                            <button
-                              type="button"
-                              className="eco__link"
-                              aria-controls={panelId(to)}
-                              onClick={() => select(to, true)}
-                            >
-                              {ECOSYSTEM_BY_ID[to].label}
-                            </button>
-                          ) : (
-                            <a className="eco__link" href={`#${panelId(to)}`}>
-                              {ECOSYSTEM_BY_ID[to].label}
-                            </a>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                    <a className="eco__source" href={brochureHref(n.page)}>
-                      {c.sourceLabel(n.page)}
-                    </a>
-                  </div>
-                </article>
-              );
-            })}
+          <div className="eco__panels">
+            {ORDER.map((id) => card(ECOSYSTEM_BY_ID[id]))}
           </div>
         </div>
 

@@ -1,20 +1,41 @@
-/* Scene 04 — IWMS ecosystem (M4 layout: centred header, module pills, one framed city view with a
-   contextual info card, capability cards). Existing tokens only. No backdrop-filter, no glows, no
-   animations — short CSS transitions only, disabled under reduced motion. 3D overlay styles
-   (hotspots, labels, connections) live in stage.css, owned by the stage. */
+/* Scene 04 — IWMS ecosystem (M4.1: centred header, module pills, one dominant city view with
+   progressive disclosure — a small hint in the overview, a compact summary when a module is
+   selected, the full details below the city on request — then capability cards). Existing tokens
+   only. No backdrop-filter, no glows, no animations — short CSS transitions only, disabled under
+   reduced motion. 3D overlay styles (hotspots, labels, connections) live in stage.css. */
 .eco {
   --signal: #a6dcc8;
   --signal-dim: rgba(166, 220, 200, 0.4);
   --line: rgba(232, 237, 245, 0.12);
   --card: #111a2b;
-  --overlay-w: 22rem;
-  --overlay-inset: 16px;
+  --float-bg: rgba(11, 17, 30, 0.94);
+  /* Fixed site header height (site-header.css: 44px targets + 0.75rem padding) + a little air. */
+  --eco-header: 76px;
+  --eco-clear: calc(var(--eco-header) + 1rem);
   position: relative;
   color: var(--text-light);
   background:
-    radial-gradient(70% 40% at 50% 30%, rgba(58, 74, 102, 0.2), transparent 70%),
-    linear-gradient(to bottom, var(--night-950) 0%, #0d1526 45%, var(--night-950) 100%);
+    radial-gradient(
+      70% 40% at 50% 30%,
+      rgba(58, 74, 102, 0.2),
+      transparent 70%
+    ),
+    linear-gradient(
+      to bottom,
+      var(--night-950) 0%,
+      #0d1526 45%,
+      var(--night-950) 100%
+    );
   z-index: 1;
+}
+/* In-page jumps (no-JS pills, Connected-to links, anchors into the section) land clear of the
+   fixed header. A jump to #ecosystem itself relies on the section's top padding. */
+.eco__head,
+.eco__tabs,
+.eco__view,
+.eco__card,
+.eco__details {
+  scroll-margin-top: var(--eco-clear);
 }
 /* Soft seam: the hero's final frame fades into the section as it scrolls in (overlay only; no
    effect on the hero timeline). */
@@ -34,7 +55,7 @@
   align-items: center;
   max-width: calc(1200px + 2 * var(--gutter));
   margin: 0 auto;
-  padding: 6rem var(--gutter) 5rem;
+  padding: calc(var(--eco-header) + clamp(1rem, 2.5vh, 2rem)) var(--gutter) 6rem;
   box-sizing: border-box;
 }
 /* Flex children may shrink below their content (the scrolling pill row must not widen the page). */
@@ -45,14 +66,14 @@
 
 /* Header */
 .eco__head {
-  max-width: 46rem;
+  max-width: 64rem;
   text-align: center;
 }
 .eco__eyebrow {
-  margin: 0 0 0.75rem;
+  margin: 0 0 0.7rem;
   font-size: 0.72rem;
   font-weight: 600;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--signal);
 }
@@ -60,14 +81,15 @@
   margin: 0;
   font-family: var(--font-display), 'Segoe UI', system-ui, sans-serif;
   font-weight: 600;
-  font-size: clamp(1.6rem, 2.8vw, 2.4rem);
-  line-height: 1.18;
-  letter-spacing: 0.005em;
+  font-size: clamp(1.7rem, 2.7vw, 2.45rem);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
   text-wrap: balance;
 }
 .eco__lead {
-  margin: 1rem auto 0;
-  font-size: clamp(0.94rem, 1.1vw, 1.05rem);
+  max-width: 40rem;
+  margin: 0.8rem auto 0;
+  font-size: clamp(0.95rem, 1.05vw, 1.05rem);
   line-height: 1.6;
   color: var(--text-muted);
   text-wrap: pretty;
@@ -80,7 +102,7 @@
   justify-content: center;
   align-items: center;
   gap: 0.5rem;
-  margin-top: 2rem;
+  margin-top: 1.5rem;
 }
 .eco__tabs--static ul {
   display: flex;
@@ -163,25 +185,41 @@
 .eco__link:focus-visible,
 .eco__action:focus-visible,
 .eco__source:focus-visible,
-.eco__card:focus-visible,
+.eco__details-btn:focus-visible,
+.eco__close-btn:focus-visible,
 .eco__overview-btn:focus-visible {
   outline: 2px solid var(--amber);
   outline-offset: 2px;
 }
 
-/* Stage card (the slot fills it) */
+/* City view. --stage-h sizes the stage card and anchors the floating summary to its bottom. */
 .eco__view {
+  --stage-h: max(300px, 78vw);
   position: relative;
   width: 100%;
-  margin-top: 1.75rem;
+  margin-top: 1.25rem;
+}
+@media (min-width: 768px) {
+  .eco__view {
+    --stage-h: clamp(380px, min(56vw, 100vh - 350px), 640px);
+  }
+}
+@media (min-width: 1100px) {
+  .eco__view {
+    --stage-h: clamp(440px, 100vh - 320px, 720px);
+  }
 }
 .eco__stage-card {
   position: relative;
-  height: max(300px, 78vw);
+  height: var(--stage-h);
   border: 1px solid rgba(232, 237, 245, 0.1);
-  border-radius: 16px;
+  border-radius: 18px;
   background:
-    radial-gradient(90% 70% at 50% 40%, rgba(27, 38, 56, 0.85), transparent 75%),
+    radial-gradient(
+      90% 70% at 50% 40%,
+      rgba(27, 38, 56, 0.85),
+      transparent 75%
+    ),
     linear-gradient(160deg, #0f1828 0%, var(--night-950) 100%);
   overflow: hidden;
 }
@@ -205,16 +243,6 @@
     linear-gradient(var(--b), var(--b)) bottom right / 1px var(--l);
   background-repeat: no-repeat;
 }
-@media (min-width: 768px) {
-  .eco__stage-card {
-    height: 56vw;
-  }
-}
-@media (min-width: 1100px) {
-  .eco__stage-card {
-    height: clamp(420px, 62vh, 700px);
-  }
-}
 
 /* 3D slot (M3): the schematic stays until the miniature city's first compiled frame, and
    returns if WebGL is unavailable or the context is lost. */
@@ -224,7 +252,7 @@
 }
 .eco__slot .eco__map {
   position: absolute;
-  inset: 5% calc(var(--eco-inset, 0px) + 3%) 5% 3%;
+  inset: 5% 3%;
   width: auto;
   transition: opacity 0.4s ease;
 }
@@ -242,28 +270,30 @@
   opacity: 1;
 }
 
-.eco__overview-btn {
+/* Overview hint: a small chip in the city's bottom-left corner (reported to the stage as an
+   obstacle so no hotspot sits under it). */
+.eco__hint {
   position: absolute;
-  top: 16px;
-  right: calc(var(--eco-inset, 0px) + 16px);
+  left: 16px;
+  bottom: 16px;
   z-index: 4;
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  min-height: 36px;
-  padding: 0 0.85rem;
-  border: 1px solid rgba(232, 237, 245, 0.22);
+  gap: 0.4rem;
+  max-width: calc(100% - 32px);
+  margin: 0;
+  padding: 0.35rem 0.75rem 0.35rem 0.6rem;
+  border: 1px solid rgba(232, 237, 245, 0.14);
   border-radius: 999px;
-  background: rgba(10, 15, 28, 0.85);
-  color: var(--text-light);
-  font: inherit;
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: border-color 0.15s ease;
+  background: rgba(10, 15, 28, 0.8);
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  line-height: 1.3;
+  pointer-events: none;
 }
-.eco__overview-btn:hover {
-  border-color: var(--amber);
+.eco__hint svg {
+  flex: none;
+  color: var(--amber);
 }
 
 /* Note line under the stage */
@@ -271,8 +301,8 @@
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  margin: 1.1rem 0 0;
-  font-size: 0.78rem;
+  margin: 1.25rem 0 0;
+  font-size: 0.76rem;
   line-height: 1.4;
   color: var(--text-muted);
   text-align: center;
@@ -368,18 +398,36 @@
   fill: var(--text-light);
 }
 
-/* Info card: one at a time when enhanced (below the stage < 1100px, overlaid ≥ 1100px); every
-   module listed without JS. */
+/* Module panels. Enhanced: one tabpanel at a time = a compact summary (in flow below the city,
+   or floating on it — see below) + the full details, collapsed until "View details". Without
+   JS: every module listed, fully expanded, as one card each. */
 .eco__panels {
   display: grid;
   gap: 1rem;
   margin-top: 1rem;
 }
 .eco__card {
-  padding: 1.25rem 1.35rem 1.2rem;
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.eco[data-enhanced='false'] .eco__card {
+  gap: 0;
+  padding: 1.35rem 1.5rem 1.25rem;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--card);
+}
+.eco[data-enhanced='true'] .eco__summary,
+.eco[data-enhanced='true'] .eco__details {
+  min-width: 0;
+  padding: 1.15rem 1.3rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+}
+.eco__summary-main {
+  min-width: 0;
 }
 .eco__card-tag {
   margin: 0;
@@ -397,49 +445,46 @@
   letter-spacing: 0.08em;
 }
 .eco__card-title {
-  margin: 0.45rem 0 0;
+  margin: 0.4rem 0 0;
   font-family: var(--font-display), 'Segoe UI', system-ui, sans-serif;
-  font-size: 1.12rem;
+  font-size: 1.1rem;
   font-weight: 600;
   line-height: 1.3;
+  text-wrap: balance;
 }
 .eco__card-note {
-  margin: 0.6rem 0 0;
-  padding: 0.45rem 0.6rem;
+  margin: 0.55rem 0 0;
+  padding: 0.4rem 0.6rem;
   border: 1px dashed var(--signal-dim);
   border-radius: 6px;
-  font-size: 0.76rem;
+  font-size: 0.75rem;
   line-height: 1.4;
   color: var(--signal);
 }
 .eco__card-summary {
-  margin: 0.6rem 0 0;
-  font-size: 0.88rem;
+  margin: 0.5rem 0 0;
+  font-size: 0.875rem;
   line-height: 1.5;
   color: var(--text-muted);
+  text-wrap: pretty;
 }
-.eco__card-sub {
-  display: block;
-  margin: 1rem 0 0.4rem;
-  font-size: 0.64rem;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-.eco__card-list {
+/* Key highlights (the first capabilities) in the compact summary. */
+.eco__highlights {
   display: grid;
-  gap: 0.35rem;
-  margin: 0;
+  gap: 0.3rem;
+  margin: 0.75rem 0 0;
   padding: 0;
   list-style: none;
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   line-height: 1.4;
+  color: var(--text-light);
 }
+.eco__highlights li,
 .eco__card-list li {
   position: relative;
   padding-left: 0.95rem;
 }
+.eco__highlights li::before,
 .eco__card-list li::before {
   content: '';
   position: absolute;
@@ -450,13 +495,112 @@
   border-radius: 50%;
   background: var(--signal);
 }
+.eco__summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+.eco__details-btn,
+.eco__overview-btn,
+.eco__close-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 36px;
+  padding: 0 0.85rem;
+  border: 1px solid rgba(232, 237, 245, 0.22);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-light);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+.eco__details-btn {
+  border-color: rgba(255, 165, 38, 0.55);
+  background: rgba(255, 165, 38, 0.08);
+}
+.eco__details-btn:hover {
+  border-color: var(--amber);
+  background: rgba(255, 165, 38, 0.14);
+}
+.eco__details-btn svg {
+  transition: transform 0.15s ease;
+}
+.eco__details-btn[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+.eco__overview-btn:hover,
+.eco__close-btn:hover {
+  border-color: rgba(232, 237, 245, 0.5);
+}
+.eco__close-btn {
+  flex: none;
+  min-height: 32px;
+  padding: 0 0.7rem;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+/* Full details */
+.eco__details-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.25rem;
+  border-bottom: 1px solid var(--line);
+}
+.eco__details-title {
+  margin: 0;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.eco__details-name {
+  color: var(--text-light);
+  letter-spacing: 0.08em;
+}
+.eco__details-grid {
+  display: grid;
+  gap: 0 2.5rem;
+}
+.eco__card-sub {
+  display: block;
+  margin: 1rem 0 0.45rem;
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.eco__card-list {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
 .eco__card-benefit {
   margin: 1rem 0 0;
-  padding-top: 0.85rem;
-  border-top: 1px solid var(--line);
-  font-size: 0.86rem;
+  padding: 0.7rem 0.85rem;
+  border-left: 2px solid var(--amber);
+  border-radius: 0 8px 8px 0;
+  background: rgba(255, 165, 38, 0.06);
+  font-size: 0.88rem;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 .eco__card-links {
   display: flex;
@@ -470,13 +614,13 @@
   display: inline-flex;
   align-items: center;
   min-height: 32px;
-  padding: 0 0.7rem;
+  padding: 0 0.75rem;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: transparent;
   color: var(--text-light);
   font: inherit;
-  font-size: 0.76rem;
+  font-size: 0.78rem;
   text-decoration: none;
   cursor: pointer;
   transition: border-color 0.15s ease;
@@ -486,7 +630,7 @@
 }
 .eco__source {
   display: inline-block;
-  margin-top: 0.85rem;
+  margin-top: 0.9rem;
   font-size: 0.74rem;
   color: var(--text-muted);
 }
@@ -494,55 +638,61 @@
   color: var(--text-light);
 }
 
-/* Tablet: card below the stage, head across the top, capabilities and connections side by side. */
-@media (min-width: 768px) and (max-width: 1099px) {
-  .eco[data-enhanced='true'] .eco__card:not([hidden]) {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    column-gap: 1.75rem;
+@media (min-width: 768px) {
+  /* Details: capabilities beside benefit / connections / source. */
+  .eco__details-grid {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
   }
-  .eco[data-enhanced='true'] .eco__card-head {
-    grid-column: 1 / -1;
+  /* In-flow summary (overview, or over the schematic fallback): one row — text left,
+     highlights and actions right. */
+  .eco[data-enhanced='true'] .eco__summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    gap: 0 2.5rem;
+    align-items: start;
+  }
+  .eco[data-enhanced='true'] .eco__summary-aside .eco__highlights {
+    margin-top: 0.15rem;
+  }
+
+  /* Focused over the live 3D stage: the compact summary floats on the city, bottom-left,
+     anchored to the stage card's bottom edge. Solid (no blur), never scrolls internally. */
+  .eco__view[data-float='true'] .eco__card:not([hidden]) .eco__summary {
+    position: absolute;
+    left: 16px;
+    bottom: calc(100% - var(--stage-h) + 16px);
+    z-index: 6;
+    display: block;
+    box-sizing: border-box;
+    width: min(21.5rem, calc(100% - 32px));
+    padding: 1rem 1.1rem 0.95rem;
+    border-color: rgba(232, 237, 245, 0.16);
+    background: var(--float-bg);
+    box-shadow: 0 14px 34px rgba(3, 6, 14, 0.45);
+  }
+  .eco__view[data-float='true'] .eco__summary-aside .eco__highlights {
+    margin-top: 0.7rem;
+  }
+  .eco__view[data-float='true'] .eco__card-title {
+    font-size: 1.04rem;
+  }
+  .eco__view[data-float='true'] .eco__card-summary {
+    font-size: 0.84rem;
   }
 }
-
-/* Wide: the selected card overlays the stage card on the right (solid, no blur), with its own
-   scroll if taller. The stage frames the city in the remaining width (insetRight). */
-@media (min-width: 1100px) {
-  .eco[data-enhanced='true'] .eco__panels {
-    position: absolute;
-    top: var(--overlay-inset);
-    right: var(--overlay-inset);
-    bottom: var(--overlay-inset);
-    z-index: 5;
-    width: var(--overlay-w);
-    margin: 0;
+/* Mid widths: the floating summary stays short (highlights remain in the details). */
+@media (min-width: 768px) and (max-width: 1099px) {
+  .eco__view[data-float='true'] .eco__highlights {
+    display: none;
   }
-  .eco[data-enhanced='true'] .eco__card:not([hidden]) {
-    height: 100%;
-    box-sizing: border-box;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    padding: 1.1rem 1.2rem;
-    border-color: rgba(232, 237, 245, 0.14);
-    background: rgba(13, 19, 33, 0.92);
-    scrollbar-width: thin;
-    scrollbar-color: rgba(232, 237, 245, 0.2) transparent;
+}
+@media (min-width: 900px) {
+  /* No JS: the full list reads as a two-column set of cards. */
+  .eco[data-enhanced='false'] .eco__panels {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .eco[data-enhanced='true'] .eco__card-title {
-    font-size: 1.05rem;
-  }
-  .eco[data-enhanced='true'] .eco__card-summary,
-  .eco[data-enhanced='true'] .eco__card-list {
-    font-size: 0.82rem;
-  }
-  .eco[data-enhanced='true'] .eco__card-sub {
-    margin-top: 0.85rem;
-  }
-  .eco[data-enhanced='true'] .eco__card-benefit {
-    margin-top: 0.85rem;
-    padding-top: 0.75rem;
-    font-size: 0.82rem;
+  .eco[data-enhanced='false'] .eco__details-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -552,7 +702,7 @@
   grid-template-columns: 1fr;
   gap: 1rem;
   width: 100%;
-  margin: 3rem 0 0;
+  margin: 3.5rem 0 0;
   padding: 0;
   list-style: none;
 }
@@ -639,10 +789,11 @@
   background: #ffb54a;
 }
 
-/* Small screens: one horizontally scrolling pill row, ≥44px targets. */
+/* Small screens: one horizontally scrolling pill row, ≥44px targets; the summary sits below
+   the city in normal flow (nothing covers the city except the small hint). */
 @media (max-width: 767px) {
-  .eco__inner {
-    padding-top: 5rem;
+  .eco {
+    --eco-header: 64px;
   }
   .eco[data-enhanced='true'] .eco__tabs {
     flex-wrap: nowrap;
@@ -670,14 +821,24 @@
   .eco__map-label {
     font-size: 2.8px;
   }
-  /* Bottom-right on phones: the top of the small stage is where the selected zone's label sits. */
-  .eco__overview-btn {
-    top: auto;
-    right: 12px;
+  .eco__hint {
+    left: 12px;
     bottom: 12px;
-    min-height: 32px;
-    padding: 0 0.7rem;
-    font-size: 0.72rem;
+    font-size: 0.7rem;
+  }
+  .eco[data-enhanced='true'] .eco__summary,
+  .eco[data-enhanced='true'] .eco__details {
+    padding: 1rem 1.05rem;
+  }
+  .eco__details-btn,
+  .eco__overview-btn,
+  .eco__close-btn,
+  .eco__link {
+    min-height: 44px;
+  }
+  .eco__summary-actions > * {
+    flex: 1 1 auto;
+    justify-content: center;
   }
   .eco__note {
     align-items: flex-start;

@@ -43,6 +43,13 @@
   pointer-events: auto;
   cursor: pointer;
 }
+/* No room above (stage top edge or another label): the label sits below its dot instead. */
+.eco__hotspot[data-flip='true'] {
+  translate: -50% -5px;
+}
+.eco__hotspot[data-flip='true'] .eco__hotspot-label {
+  order: 1;
+}
 .eco__hotspot-label {
   order: -1;
   display: inline-flex;

@@ -234,6 +234,16 @@ export const ecosystemStageContent = {
   stageNote: 'Illustrative city view. Module details are taken from the IWMS brochure.',
   overviewLabel: 'Return to overview',
   pillarsLabel: 'What IWMS adds to daily operations',
+  /** M4.1 (PROPOSED): concise section lead shown above the module pills. */
+  lead: 'Seven IWMS modules follow waste from household to landfill, all connected to the city’s command centre. Select a module to explore it.',
+  /** M4.1: small overview hint overlaid on the city. */
+  hint: 'Select a module or a zone on the map',
+  /** M4.1: progressive disclosure of the full module details below the city. */
+  detailsLabel: 'View details',
+  detailsTitle: 'Full details',
+  closeLabel: 'Close',
+  closeDetailsLabel: (name: string) => `Close details for ${name}`,
+  highlightsLabel: 'Key highlights',
 };
 
 export interface EcosystemPillar {

@@ -123,6 +123,16 @@ test.describe('Scene 04 ecosystem (M2)', () => {
       }));
       expect(m.docW).toBe(m.vw);
       expect(m.slotH).toBeGreaterThan(200);
+      // In-page links land clear of the fixed site header; details are all expanded.
+      await section.locator('.eco__tabs--static a[href="#eco-landfill"]').click();
+      await page.waitForTimeout(300);
+      const clear = await page.evaluate(
+        () =>
+          document.querySelector('#eco-landfill')!.getBoundingClientRect().top -
+          document.querySelector('.site-header')!.getBoundingClientRect().bottom,
+      );
+      expect(clear).toBeGreaterThanOrEqual(0);
+      await expect(section.locator('#eco-landfill-details')).toBeVisible();
       await expect(section.locator('a.eco__action--primary')).toHaveAttribute('href', /^(mailto:|https:\/\/www\.zigma\.in)/);
     });
   });
@@ -169,6 +179,8 @@ test.describe('Scene 04 ecosystem (M2)', () => {
     await expect(page.locator('#eco-weighbridge .eco__card-tag')).toContainText('Module 04');
 
     // "Connected to" selects the target and moves focus to its tab.
+    // (M4.1) "Connected to" lives in the disclosed full details.
+    await page.locator('#eco-weighbridge .eco__details-btn').click();
     await page.locator('#eco-weighbridge .eco__link', { hasText: 'Processing' }).click();
     expect(await visiblePanels(page)).toEqual(['eco-processing']);
     await expect(page.locator('#eco-tab-processing')).toBeFocused();
@@ -224,10 +236,12 @@ test.describe('Scene 04 ecosystem (M2)', () => {
     expect(errors).toEqual([]);
   });
 
-  test('desktop layout (M4): centred header, one pill row, dominant city view, four capability cards', async ({
+  test('desktop layout (M4.1): header clear of the site header, one pill row, unobstructed city, compact summary', async ({
     page,
   }) => {
     await openCinematic(page);
+    // Section top at the viewport top: the heading sits below the fixed site header.
+    await scrollTo(page, await page.evaluate(() => document.querySelector<HTMLElement>('#ecosystem')!.offsetTop));
     const m = await page.evaluate(() => {
       const s = document.querySelector<HTMLElement>('#ecosystem')!;
       const r = (sel: string) => s.querySelector<HTMLElement>(sel)!.getBoundingClientRect();
@@ -235,29 +249,58 @@ test.describe('Scene 04 ecosystem (M2)', () => {
       const sec = s.getBoundingClientRect();
       const head = r('.eco__head');
       const stage = r('.eco__stage-card');
-      const card = r('.eco__card:not([hidden])');
       return {
+        headerBottom: document.querySelector('.site-header')!.getBoundingClientRect().bottom,
+        eyebrowTop: r('.eco__eyebrow').top,
         headCentre: Math.abs(head.left + head.width / 2 - (sec.left + sec.width / 2)),
         titleAlign: getComputedStyle(s.querySelector('.eco__title')!).textAlign,
         rows: new Set(tabs.map((t) => Math.round(t.top))).size,
         stageW: stage.width / innerWidth,
         stageH: stage.height,
-        cardInside: card.left >= stage.left && card.right <= stage.right + 1,
-        cardW: card.width / stage.width,
+        // Header, pills and the whole city view fit one 1440×900 viewport.
+        stageBottom: stage.bottom,
         pillars: s.querySelectorAll('.eco__pillar').length,
         sticky: [...s.querySelectorAll<HTMLElement>('*')].some((e) => getComputedStyle(e).position === 'sticky'),
       };
     });
+    expect(m.eyebrowTop, 'heading clear of the fixed header').toBeGreaterThanOrEqual(m.headerBottom + 8);
     expect(m.headCentre).toBeLessThanOrEqual(2);
     expect(m.titleAlign).toBe('center');
     expect(m.rows, 'pills form one horizontal row').toBe(1);
     expect(m.stageW).toBeGreaterThan(0.7);
     expect(m.stageH).toBeGreaterThanOrEqual(420);
-    // The single info card overlays the city view and stays secondary to it.
-    expect(m.cardInside).toBe(true);
-    expect(m.cardW).toBeLessThan(0.4);
+    expect(m.stageBottom).toBeLessThanOrEqual(900);
     expect(m.pillars).toBe(4);
     expect(m.sticky, 'natural flow, no pinned stage').toBe(false);
+
+    // Overview: nothing large over the city — the card sits below it.
+    await scrollTo(page, (await heroBottomY(page)) + 40);
+    await expect(page.locator('.eco__slot')).toHaveAttribute('data-stage', 'ready', { timeout: 30_000 });
+    const below = await page.evaluate(() => {
+      const stage = document.querySelector('#ecosystem .eco__stage-card')!.getBoundingClientRect();
+      const card = document.querySelector('#ecosystem .eco__card:not([hidden])')!.getBoundingClientRect();
+      return card.top >= stage.bottom - 1;
+    });
+    expect(below).toBe(true);
+
+    // Selected: a compact summary floats on the city (small, no nested scrolling).
+    await page.locator('#eco-tab-processing').click();
+    const f = await page.evaluate(() => {
+      const stage = document.querySelector('#ecosystem .eco__stage-card')!.getBoundingClientRect();
+      const el = document.querySelector<HTMLElement>('#eco-processing .eco__summary')!;
+      const sum = el.getBoundingClientRect();
+      const scrolls = [el, ...el.querySelectorAll<HTMLElement>('*')].some(
+        (e) => /(auto|scroll)/.test(getComputedStyle(e).overflowY) && e.scrollHeight > e.clientHeight + 1,
+      );
+      return {
+        inside: sum.left >= stage.left && sum.right <= stage.right && sum.top >= stage.top && sum.bottom <= stage.bottom,
+        area: (sum.width * sum.height) / (stage.width * stage.height),
+        scrolls,
+      };
+    });
+    expect(f.inside).toBe(true);
+    expect(f.area, 'summary covers a small part of the city').toBeLessThan(0.2);
+    expect(f.scrolls).toBe(false);
     // Hero length untouched.
     const heroRatio = await page.evaluate(
       () => document.querySelector<HTMLElement>('section.hero')!.offsetHeight / innerHeight,
@@ -481,6 +524,34 @@ test.describe('Scene 04 city interactions (M4)', () => {
     await page.locator('.eco__stage-card').evaluate((el) => el.scrollIntoView({ block: 'center' }));
     await settle(page);
   }
+  /** Visible hotspot labels/dots that leave the slot, touch an overlay, or overlap each other. */
+  const hotspotProblems = (page: Page) =>
+    page.evaluate(() => {
+      const slot = document.querySelector('#ecosystem .eco__slot')!.getBoundingClientRect();
+      const overlays = [...document.querySelectorAll<HTMLElement>('#ecosystem [data-eco-overlay]')]
+        .filter((e) => e.offsetParent !== null)
+        .map((e) => e.getBoundingClientRect());
+      const hit = (a: DOMRect, b: DOMRect) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+      const shown = [...document.querySelectorAll<HTMLElement>('.eco__hotspot')].filter(
+        (h) => getComputedStyle(h).visibility === 'visible',
+      );
+      const boxes = shown.flatMap((h) =>
+        [h.querySelector('.eco__hotspot-label')!, h.querySelector('.eco__hotspot-dot')!].map((e) => ({
+          id: h.dataset.id!,
+          r: e.getBoundingClientRect(),
+        })),
+      );
+      const out: string[] = [];
+      for (const b of boxes) {
+        if (b.r.left < slot.left || b.r.right > slot.right || b.r.top < slot.top || b.r.bottom > slot.bottom)
+          out.push(`${b.id} leaves the city view`);
+        if (overlays.some((o) => hit(o, b.r))) out.push(`${b.id} under overlaid UI`);
+      }
+      for (let i = 0; i < boxes.length; i++)
+        for (let j = i + 1; j < boxes.length; j++)
+          if (boxes[i].id !== boxes[j].id && hit(boxes[i].r, boxes[j].r)) out.push(`${boxes[i].id} overlaps ${boxes[j].id}`);
+      return [...new Set(out)];
+    });
   const drawnLinks = (page: Page) =>
     page.$$eval('.eco__links path', (ps) => ps.filter((p) => (p.getAttribute('d') ?? '') !== '').length);
   const near = (a: EcoPose, b: EcoPose) =>
@@ -492,9 +563,11 @@ test.describe('Scene 04 city interactions (M4)', () => {
     const overview = await ecoCam(page);
     expect(overview.focused).toBe(false);
     const programs = (await eco(page))!.programs;
-    // Overview: no return control and no connection arcs until a module is chosen.
+    // Overview: no return control and no connection arcs until a module is chosen; every
+    // hotspot readable (inside the view, no overlaps).
     await expect(page.locator('.eco__overview-btn')).toHaveCount(0);
     expect(await drawnLinks(page)).toBe(0);
+    expect(await hotspotProblems(page)).toEqual([]);
 
     // A city hotspot selects its module: pill, card and camera stay in sync.
     await page.locator('.eco__hotspot[data-id="weighbridge"]').click();
@@ -513,18 +586,8 @@ test.describe('Scene 04 city interactions (M4)', () => {
     expect(links).toBeLessThanOrEqual(connects);
     await expect(page.locator('.eco__hotspot[data-state="linked"]')).toHaveCount(connects);
 
-    // Hotspots never show under the overlaid info card.
-    const overlap = await page.evaluate(() => {
-      const card = document.querySelector('#ecosystem .eco__card:not([hidden])')!.getBoundingClientRect();
-      return [...document.querySelectorAll<HTMLElement>('.eco__hotspot')]
-        .filter((h) => getComputedStyle(h).visibility === 'visible')
-        .filter((h) => {
-          const r = h.getBoundingClientRect();
-          return r.right > card.left && r.left < card.right && r.bottom > card.top && r.top < card.bottom;
-        })
-        .map((h) => h.dataset.id);
-    });
-    expect(overlap).toEqual([]);
+    // Visible hotspots stay inside the city view, clear of the overlaid UI and of each other.
+    expect(await hotspotProblems(page)).toEqual([]);
 
     // Return to overview: keyboard reachable, restores the exact overview pose, focus goes back
     // to the selected pill, arcs disappear.
@@ -566,6 +629,59 @@ test.describe('Scene 04 city interactions (M4)', () => {
     expect(errors).toEqual([]);
   });
 
+  test('details disclosure: full brochure content below the city, no auto-scroll on selection', async ({ page }) => {
+    const errors = watch(page);
+    await openCity(page);
+    await page.locator('#eco-tab-collection').click();
+    const btn = page.locator('#eco-collection .eco__details-btn');
+    await expect(btn).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.locator('#eco-collection-details')).toBeHidden();
+    await btn.click();
+    await expect(btn).toHaveAttribute('aria-expanded', 'true');
+    await expect(btn).toHaveAttribute('aria-controls', 'eco-collection-details');
+    const details = page.locator('#eco-collection-details');
+    await expect(details).toBeVisible();
+    // Every brochure capability, the benefit, connections and the source are present.
+    const node = ECOSYSTEM_NODES.find((n) => n.id === 'collection')!;
+    await expect(details.locator('.eco__card-list li')).toHaveCount(node.capabilities.length);
+    await expect(details.locator('.eco__link')).toHaveCount(node.connects.length);
+    await expect(details.locator('.eco__source')).toHaveAttribute('href', `${siteConfig.brochurePath}#page=${node.page}`);
+    // Below the city, in normal flow, no nested scrolling.
+    const m = await details.evaluate((el) => {
+      const stage = document.querySelector('#ecosystem .eco__stage-card')!.getBoundingClientRect();
+      const r = el.getBoundingClientRect();
+      const scrolls = [el, ...el.querySelectorAll<HTMLElement>('*')].some(
+        (e) => /(auto|scroll)/.test(getComputedStyle(e).overflowY) && e.scrollHeight > e.clientHeight + 1,
+      );
+      return { below: r.top >= stage.bottom - 1, scrolls };
+    });
+    expect(m.below).toBe(true);
+    expect(m.scrolls).toBe(false);
+    // Switching modules keeps the details open for the new module, without scrolling the page.
+    // Let the reveal scroll of View details finish before measuring.
+    let last = -1;
+    await expect
+      .poll(async () => {
+        const now = await page.evaluate(() => scrollY);
+        const same = now === last;
+        last = now;
+        return same;
+      }, { intervals: [250] })
+      .toBe(true);
+    const y = last;
+    // Dispatched click: Playwright's actionability scroll would otherwise move the page itself.
+    await page.locator('#eco-tab-landfill').dispatchEvent('click');
+    await expect(page.locator('#eco-landfill-details')).toBeVisible();
+    await page.waitForTimeout(400);
+    expect(Math.abs((await page.evaluate(() => scrollY)) - y)).toBeLessThanOrEqual(1);
+    // Close collapses and returns focus to View details.
+    await page.locator('#eco-landfill .eco__close-btn').click();
+    await expect(page.locator('#eco-landfill-details')).toBeHidden();
+    await expect(page.locator('#eco-landfill .eco__details-btn')).toBeFocused();
+    await expect(page.locator('#eco-landfill .eco__details-btn')).toHaveAttribute('aria-expanded', 'false');
+    expect(errors).toEqual([]);
+  });
+
   test.describe('portrait phone', () => {
     test.use({ viewport: { width: 390, height: 844 } });
     test('compact layout: city above the card, focus keeps the selected hotspot in view', async ({ page }) => {
@@ -593,6 +709,7 @@ test.describe('Scene 04 city interactions (M4)', () => {
       expect(m.selVisible).toBe(true);
       expect(m.selInside).toBe(true);
       expect(m.docW).toBe(m.vw);
+      expect(await hotspotProblems(page)).toEqual([]);
       await expect(page.locator('.eco__overview-btn')).toBeVisible();
       expect(errors).toEqual([]);
     });

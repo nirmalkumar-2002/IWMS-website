@@ -525,6 +525,79 @@ No new dependencies, canvases or render loops were added. The stage is still `fr
 - The pillar copy and the stage note are marked PROPOSED in `content/ecosystem.ts` pending content sign‑off.
 - Real mobile GPUs were still not available. The phone checks used the desktop GPU on the medium tier.
 
+## M4.1 status: visual polish and progressive disclosure (implemented)
+
+**Problems found in review** (screenshots at about 1860×830 and 1920×1080):
+1. The permanent right‑hand card hid a third of the city.
+2. The card scrolled internally, which clipped "Connected to".
+3. "Return to overview" collided with a hotspot.
+4. The heading sat under the fixed site header.
+5. Labels clipped at the city edges.
+6. Focused zones were sometimes heavily cropped.
+
+### Information: progressive disclosure
+- **Overview.** The city is unobstructed. Only a small hint chip ("Select a module or a zone on the map") sits in the bottom‑left corner. The selected module's compact summary sits *below* the city in normal flow, so the tabs ↔ tabpanel ARIA pairing stays valid.
+- **Module selected, ≥ 768 px.** The summary floats in the city's bottom‑left corner: at most 21.5 rem wide, no internal scrolling, covering under 20% of the view. It holds:
+  - the tag;
+  - the name;
+  - the short description;
+  - two key highlights, which are hidden at 768–1099 px to keep the card short;
+  - "View details" (`aria-expanded` / `aria-controls`) and "Return to overview".
+- **Module selected, < 768 px.** The summary stays below the city; there is no bottom sheet.
+- **View details.** The complete brochure content opens *below* the city in page flow: every capability, the benefit, the "Connected to" buttons and the brochure source. It has a Close control, which returns focus to View details.
+  - The open state carries across module switches.
+  - Opening scrolls just enough to reveal the details, never pushing them under the header.
+  - Selecting a module never scrolls the page.
+- **No JS.** Every module is fully expanded (2 columns from 900 px), and in‑page links land below the fixed header via `scroll-margin-top`.
+- **Header clearance.** `.eco__inner` top padding is the header height plus 1–2 rem. At 1440×900 the header, pills and the full city (about 580 px) fit one viewport.
+
+### Stage contract: `obstacles` replaces `insetRight`
+The section measures every element it overlays on the slot (`[data-eco-overlay]`: the hint chip and the floating summary). It uses ResizeObserver plus focus/selection changes, clipped to the slot, and updates by value only. It passes the result as `obstacles: Rect[]` in slot CSS px.
+
+**Camera.**
+- Overview: fits the whole island to 95% of the slot.
+- Focus: fits the selected zone plus a 12‑unit margin (including its building height) into the *free area* beside the large overlays, then tweens a view offset so the zone sits at that area's centre. Small chips are ignored for framing.
+- The focus distance is clamped to 0.40–0.78 × the overview distance. The view offset is part of the tweened pose, so focus, return and rapid selection remain one GSAP tween with `overwrite: true`, and no‑op moves are skipped.
+
+**Hotspots.**
+- Hotspots are placed by priority each rendered frame: selected first, then its connections (when focused), then the rest.
+- A hotspot is shown only if its dot is inside the slot (14 px edge margin, clear of the corner brackets) and clear of overlays and of already‑placed labels.
+- Labels slide horizontally to stay inside the slot, and flip below the dot when there is no room above.
+- Lower‑priority hotspots that would collide are hidden; the selected one is always labelled.
+- Label sizes are measured in one batched read, only after a change.
+- Connection arcs are drawn only while focused, and only between visible hotspots.
+
+### Measured (production build, Intel UHD, 1440×900, high tier)
+| Measured | M4 | M4.1 |
+|---|---|---|
+| Draw calls / triangles / textures | 4 / 3,550 / 0 | 4 / 3,550 / 0 |
+| Shader programs | 4 | 4, unchanged by interactions |
+| Frames: mount → idle | 2 | 3 (an extra frame when the measured obstacles arrive) |
+| Frames per selection | about 29 | about 26, then **0** while idle |
+| Frame cost, `gl.finish()` ×60 | p95 1.8 ms | median 0.1 ms, p95 0.5 ms |
+| JS heap in Scene 04 | 37.8 MB | 40.1 MB |
+| Stage chunk (gzip) | 5.3 KB + 0.7 KB | 6.2 KB + 0.8 KB |
+
+No new dependencies, canvases or loops were added; `frameloop="demand"` and the hero pause are unchanged.
+
+### Tests
+- **New:**
+  - header clearance and a one‑viewport check (desktop);
+  - overview card below the city;
+  - floating summary inside the city, under 20% of it, with no nested scrolling;
+  - visible hotspots stay inside the view, off overlays and non‑overlapping (overview, focused and phone);
+  - details disclosure: every capability, connection and source; below the city; no nested scrolling; no page scroll on module switch; Close returns focus;
+  - no‑JS anchors land clear of the header with details expanded.
+- **Results:**
+  - ecosystem 16 out of 16;
+  - the city frame‑count and interaction tests 2 out of 2 on repeat;
+  - lifecycle, hero and site 19 out of 19.
+
+### Limitations
+- The new lead line and the UI labels are PROPOSED copy in `content/ecosystem.ts`; the module content is unchanged.
+- At 390 px, unselected hotspots show numbers only, and the overview city is small (stage at least 300 px tall). The full content is in the summary and the details below.
+- Playwright's own auto‑scroll (when it clicks an off‑screen pill) is a test artefact, not page behaviour. The no‑scroll test uses a dispatched click.
+
 ## 12. Risks and unresolved decisions
 
 **Risks**
