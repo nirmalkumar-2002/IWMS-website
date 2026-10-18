@@ -797,6 +797,26 @@ test.describe('Scene 04 city interactions (M4)', () => {
     expect(errors).toEqual([]);
   });
 
+  const occupancy = (page: Page) =>
+    page.evaluate(() =>
+      (window as unknown as { __iwmsEco: { occupancy: () => { x: number; y: number } } }).__iwmsEco.occupancy(),
+    );
+  const hiddenHotspots = (page: Page) =>
+    page.$$eval('.eco__hotspot', (hs) =>
+      hs.filter((h) => getComputedStyle(h).visibility !== 'visible').map((h) => (h as HTMLElement).dataset.id),
+    );
+
+  test('camera composition: a large overview with every zone labelled', async ({ page }) => {
+    await openCity(page);
+    const occ = await occupancy(page);
+    // The island fills most of the 2:1 view: nearly all of its height (labels included) and,
+    // limited by its own ~1.7:1 footprint, about two thirds of its width.
+    expect(occ.y).toBeGreaterThanOrEqual(0.85);
+    expect(occ.x).toBeGreaterThanOrEqual(0.6);
+    expect(await hiddenHotspots(page)).toEqual([]);
+    expect(await hotspotProblems(page)).toEqual([]);
+  });
+
   test.describe('portrait phone', () => {
     test.use({ viewport: { width: 390, height: 844 } });
     test('compact layout: city above the card, focus keeps the selected hotspot in view', async ({ page }) => {
@@ -826,6 +846,16 @@ test.describe('Scene 04 city interactions (M4)', () => {
       expect(m.docW).toBe(m.vw);
       expect(await hotspotProblems(page)).toEqual([]);
       await expect(page.locator('.eco__popup[data-eco-popup="open"]'), 'no floating popup on phones').toHaveCount(0);
+      // Phones frame the eight zones (the island rim may bleed off); every zone stays labelled in
+      // the overview, and each selected zone stays labelled and in view when focused.
+      await page.locator('.eco__overview-btn').click();
+      await settle(page);
+      expect(await hiddenHotspots(page)).toEqual([]);
+      for (const n of ECOSYSTEM_NODES) {
+        await page.locator(`#eco-tab-${n.id}`).dispatchEvent('click');
+        await settle(page);
+        expect(await hiddenHotspots(page), n.id).not.toContain(n.id);
+      }
       await expect(page.locator('.eco__overview-btn')).toBeVisible();
       expect(errors).toEqual([]);
     });

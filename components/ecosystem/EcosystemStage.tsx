@@ -132,12 +132,19 @@ export default function EcosystemStage(props: StageProps) {
 
 const SKY = new Color('#d3dbe8');
 const GROUND = new Color('#3b3a36');
-const PITCH = (40 * Math.PI) / 180;
-const YAW = (-26 * Math.PI) / 180;
+/** Isometric-style view: elevation and heading (no orbit; fixed for every pose). */
+const PITCH = (42 * Math.PI) / 180;
+const YAW = (-32 * Math.PI) / 180;
 const DIR = new Vector3(Math.sin(YAW) * Math.cos(PITCH), Math.sin(PITCH), Math.cos(YAW) * Math.cos(PITCH));
 /** Focus distance limits as fractions of the overview distance: readable, never a fly-through. */
 const FOCUS_MIN = 0.4;
 const FOCUS_MAX = 0.78;
+/** Overview: fraction of the slot the composed city may fill (each axis). */
+const OVERVIEW_FILL = 0.94;
+/** Room kept above the tallest anchors for their hotspot labels (CSS px). */
+const LABEL_ROOM = 44;
+/** Below this slot aspect (phones / portrait) the overview frames the eight zones, not the rim. */
+const NARROW = 1.3;
 /** Margin (world units) kept around the selected zone so its surroundings stay in frame. */
 const ZONE_MARGIN = 12;
 /** Fraction of the free area the focused zone (with margin) may fill. */
@@ -150,6 +157,8 @@ const EDGE = 14;
 /** Popup clearance (CSS px) from the slot edges and from the selected zone. */
 const POP_EDGE = 16;
 const POP_GAP = 24;
+/** Focused views keep this top band (CSS px) clear for the "Return to overview" pill. */
+const TOP_RESERVE = 60;
 
 interface Pose {
   px: number;
@@ -199,7 +208,8 @@ function City({
   const frames = useRef(0);
   /** Current camera pose (tweened); overview distance from the last fit. */
   const pose = useRef<Pose>({ px: 0, py: 0, pz: 0, tx: 0, ty: 0, tz: 0, ox: 0, oy: 0 });
-  const fit = useRef({ dist: 0 });
+  /** Overview composition from the last fit: distance and the view offset that centres it. */
+  const fit = useRef({ dist: 0, ox: 0, oy: 0 });
   const mode = useRef({ focused, selected });
   // Obstacles by value: a new array with the same rectangles must not reframe the camera.
   const obsKey = JSON.stringify(obstacles ?? []);
@@ -224,8 +234,9 @@ function City({
   /** Area the focused zone is framed in: the slot minus the popup's column (if any). */
   const focusArea = (w: number, h: number, id: EcosystemNodeId): Box => {
     const col = pop.current.w ? pop.current.w + POP_EDGE + POP_GAP : 0;
-    if (!col || col > w * 0.5) return { l: 0, t: 0, r: w, b: h };
-    return popupSide(id) === 'right' ? { l: 0, t: 0, r: w - col, b: h } : { l: col, t: 0, r: w, b: h };
+    const t = Math.min(TOP_RESERVE, h * 0.25);
+    if (!col || col > w * 0.5) return { l: 0, t, r: w, b: h };
+    return popupSide(id) === 'right' ? { l: 0, t, r: w - col, b: h } : { l: col, t, r: w, b: h };
   };
   /** Popup placement for a pose: beside the zone's projected footprint, clamped in the slot. */
   const placement = (to: Pose, id: EcosystemNodeId): PopupPlacement | null => {
@@ -299,9 +310,9 @@ function City({
     const w = Math.max(1, size.width);
     const h = Math.max(1, size.height);
     if (!isFocused) {
-      const dist = fit.current.dist;
+      const { dist, ox, oy } = fit.current;
       const [cx, , cz] = d.center;
-      return { px: cx + DIR.x * dist, py: DIR.y * dist, pz: cz + DIR.z * dist, tx: cx, ty: 0, tz: cz, ox: 0, oy: 0 };
+      return { px: cx + DIR.x * dist, py: DIR.y * dist, pz: cz + DIR.z * dist, tx: cx, ty: 0, tz: cz, ox, oy };
     }
     // Focus: fit the selected zone plus a margin into the area left beside the popup's column
     // (if a popup is floated), then shift the view so the zone sits at the centre of that area.
@@ -338,27 +349,58 @@ function City({
     };
   };
 
-  // Fit the overview to the whole slot (portrait aware). Resizes snap to the current pose.
+  // Overview composition: fit the projected bounding box of the city (the island with its slab,
+  // or on narrow slots the eight zones) plus room for the top labels, then centre that box with
+  // the view offset — perspective otherwise leaves the city low with empty sky above it.
+  // Resizes snap to the current pose.
   useEffect(() => {
     const w = Math.max(1, size.width);
     const h = Math.max(1, size.height);
     scratch.aspect = w / h;
     scratch.updateProjectionMatrix();
-    const [hx, hz] = d.extent;
-    const corners = [-1, 1].flatMap((sx) =>
-      [-1, 1].flatMap((sz) => [-4, 6].map((y) => [d.center[0] + sx * hx, y, d.center[2] + sz * hz])),
-    );
-    let dist = d.radius * 3;
-    for (let i = 0; i < 5; i++) {
-      placeScratch(d.center[0], d.center[2], dist);
-      let m = 0;
-      for (const c of corners) {
-        tmp.set(c[0], c[1], c[2]).project(scratch);
-        m = Math.max(m, Math.abs(tmp.x), Math.abs(tmp.y));
-      }
-      dist *= m / 0.95;
+    const pts: number[][] = [];
+    if (w / h >= NARROW) {
+      const [hx, hz] = d.extent;
+      for (const sx of [-1, 1])
+        for (const sz of [-1, 1])
+          for (const y of [-4, 0]) pts.push([d.center[0] + sx * hx, y, d.center[2] + sz * hz]);
+    } else {
+      for (const z of Object.values(d.zones))
+        for (const sx of [-1, 1]) for (const sz of [-1, 1]) pts.push([z.x + (sx * z.w) / 2, 0, z.z + (sz * z.d) / 2]);
     }
-    fit.current.dist = dist;
+    const tops = Object.values(d.anchors);
+    const box = () => {
+      const b = { l: Infinity, t: Infinity, r: -Infinity, b: -Infinity };
+      const add = (x: number, y: number) => {
+        b.l = Math.min(b.l, x);
+        b.r = Math.max(b.r, x);
+        b.t = Math.min(b.t, y);
+        b.b = Math.max(b.b, y);
+      };
+      for (const c of pts) {
+        tmp.set(c[0], c[1], c[2]).project(scratch);
+        add((tmp.x * 0.5 + 0.5) * w, (-tmp.y * 0.5 + 0.5) * h);
+      }
+      for (const a of tops) {
+        tmp.set(a[0], a[1], a[2]).project(scratch);
+        add((tmp.x * 0.5 + 0.5) * w, (-tmp.y * 0.5 + 0.5) * h - LABEL_ROOM);
+      }
+      return b;
+    };
+    let dist = d.radius * 3;
+    let b = box();
+    for (let i = 0; i < 6; i++) {
+      placeScratch(d.center[0], d.center[2], dist);
+      b = box();
+      dist *= Math.max((b.r - b.l) / (w * OVERVIEW_FILL), (b.b - b.t) / (h * OVERVIEW_FILL));
+    }
+    placeScratch(d.center[0], d.center[2], dist);
+    b = box();
+    fit.current = {
+      dist,
+      ox: Math.round((b.l + b.r) / 2 - w / 2),
+      oy: Math.round((b.t + b.b) / 2 - h / 2),
+    };
     (camera as PerspectiveCamera).aspect = w / h;
     gsap.killTweensOf(pose.current);
     Object.assign(pose.current, target(mode.current.focused, mode.current.selected));
@@ -455,18 +497,23 @@ function City({
       let place: { flip: boolean; dx: number } | null = null;
       if (tmp.z < 1 && dot.l >= EDGE && dot.r <= w - EDGE && dot.t >= EDGE && dot.b <= h - EDGE && !taken.some((b) => hit(b, dot))) {
         const [lw, lh] = ls.sizes[id] ?? [0, 0];
-        // Keep the label inside the slot horizontally (slide it, the dot stays on its anchor).
+        // Candidates: centred above, centred below, then slid towards either side (the dot stays
+        // on its anchor); each kept inside the slot horizontally.
         const left = x - lw / 2;
-        const dx = Math.max(EDGE - left, Math.min(0, w - EDGE - (left + lw)));
-        const above: Box = { l: left + dx, t: y - LABEL_GAP - lh, r: left + dx + lw, b: y - LABEL_GAP };
-        const below: Box = { l: left + dx, t: y + LABEL_GAP, r: left + dx + lw, b: y + LABEL_GAP + lh };
+        const keep = (o: number) => o + Math.max(EDGE - (left + o), Math.min(0, w - EDGE - (left + o + lw)));
+        const slide = Math.max(0, lw / 2 - 12);
+        const box = (flip: boolean, dx: number): Box => {
+          const t = flip ? y + LABEL_GAP : y - LABEL_GAP - lh;
+          return { l: left + dx, t, r: left + dx + lw, b: t + lh };
+        };
         const fits = (b: Box) => b.t >= EDGE && b.b <= h - EDGE;
         const free = (b: Box) => fits(b) && !taken.some((t) => hit(t, b));
-        if (free(above)) place = { flip: false, dx };
-        else if (free(below)) place = { flip: true, dx };
-        else if (id === sel) place = { flip: !fits(above), dx }; // the selection is always labelled
+        for (const flip of [false, true])
+          for (const dx of [keep(0), keep(slide), keep(-slide)])
+            if (!place && free(box(flip, dx))) place = { flip, dx };
+        if (!place && id === sel) place = { flip: !fits(box(false, keep(0))), dx: keep(0) }; // the selection is always labelled
         if (place) {
-          taken.push(dot, place.flip ? below : above);
+          taken.push(dot, box(place.flip, place.dx));
         }
       }
       shown[id] = place ? [x, y] : null;
@@ -528,6 +575,22 @@ function City({
         contextLost: gl.getContext().isContextLost(),
         drawingBuffer: [gl.getContext().drawingBufferWidth, gl.getContext().drawingBufferHeight],
       }),
+      /** QA only: share of the slot covered by the projected island (bounding box, each axis). */
+      occupancy: () => {
+        const [hx, hz] = d.extent;
+        const b = { l: 1, r: -1, t: 1, b: -1 };
+        for (const sx of [-1, 1])
+          for (const sz of [-1, 1])
+            for (const y of [-4, 0]) {
+              const v = new Vector3(d.center[0] + sx * hx, y, d.center[2] + sz * hz).project(camera);
+              b.l = Math.min(b.l, v.x);
+              b.r = Math.max(b.r, v.x);
+              b.t = Math.min(b.t, v.y);
+              b.b = Math.max(b.b, v.y);
+            }
+        const cl = (x: number) => Math.max(-1, Math.min(1, x));
+        return { x: (cl(b.r) - cl(b.l)) / 2, y: (cl(b.b) - cl(b.t)) / 2 };
+      },
       /** QA only: render n frames synchronously, each waited for with gl.finish() (CPU+GPU). */
       bench: (n = 30) => {
         const ctx = gl.getContext();

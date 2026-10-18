@@ -674,6 +674,45 @@ There are no new dependencies, canvases or loops, and the popup is plain HTML/CS
 - The side choice is per zone (west or east), not per viewport. Near‑central zones (ICCC, Weighbridge) always use the left side.
 - The hidden twin duplicates the selected summary's DOM, hidden from assistive technology and inert.
 
+## Camera angle and city framing refinement (implemented)
+
+**Problem.** The overview city looked small, with a lot of empty space. The fit was symmetric about the look‑at point, but perspective projects the island low in the frame, which left an empty band of sky above it. At 1440×900 the island covered about 60% of the view's width and 76% of its height.
+
+### Approach (camera only: same geometry, materials and draw calls)
+- **Angle.** The isometric‑style view is now 42° elevation and −32° heading (was 40° and −26°), at fov 28. There is no orbit, and the angle is the same for every pose.
+- **Overview composition.**
+  - The camera fits the *projected bounding box* of the city: the island with its slab, plus 44 px above the tallest anchors for their labels. It fills 94% of the view on each axis.
+  - It then centres that box with a view offset. The offset is part of the overview pose, so Return to overview restores exactly this composition.
+- **Narrow views (slot aspect < 1.3, i.e. phones).** The overview frames the eight operational zones rather than the island rim. The rim may bleed off the edges, prioritising readability over showing the whole slab.
+- **Focused views.** These keep the M4.2 system: zone plus margin, the popup column and the target‑pose popup placement. They now also reserve a 60 px top band (at most 25% of the height) for the Return to overview pill. Before this, tall anchors such as ICCC could be framed under the pill on phones.
+- **Hotspot labels.** Labels try above‑centred, then above slid right or left, then the same three positions below, before hiding. Resources (between Grievances and D2D) therefore stays labelled at 1024 px. A hotspot is hidden only when it is off‑screen, under the popup, or has no free position.
+
+### Result (overview occupancy, projected island bounding box versus view)
+| Viewport | Before | After |
+|---|---|---|
+| 1440×900 (view about 2.07:1) | about 60% × 76% | **67% × 90%**, centred |
+| 1024×768 | (smaller) | 59% × 88% |
+| 390×844 | island fully inside, small | zones fill the view; the rim bleeds off the sides (100% × 81%) |
+
+The width share is bounded by the island's own footprint (about 1.7:1) inside a 2:1 view. Raising it further would mean cropping the ICCC tower or the Collection corner, so I didn't.
+- **Overview:** all eight hotspots are visible at all three sizes.
+- **Focused views:** the selected hotspot is always visible. Focused Weighbridge at 1440, for example, shows six hotspots of context.
+
+### Performance
+- Unchanged: 4 draw calls, 3,550 triangles, 0 textures, 4 programs, 3 frames from mount to idle, about 27 frames per selection and then 0.
+- Frame cost is p95 0.1 ms.
+- The extra work runs once per resize (bounding‑box fit over 38 points × 7 iterations) or per rendered frame (at most 6 label candidates for each of 8 hotspots). Neither runs while idle.
+- The stage chunk is 7.1 KB gzip (+0.4 KB).
+
+### Tests
+- **New:**
+  - overview composition: occupancy at least 0.85 vertically and at least 0.6 horizontally at 1440, all eight hotspots labelled, no label problems;
+  - phones: all eight labelled in the overview, and each selected zone labelled when focused.
+- **Results:**
+  - ecosystem 18 out of 18;
+  - the city and interaction tests 2 out of 2 on repeat;
+  - lifecycle, hero and site 19 out of 19.
+
 ## 12. Risks and unresolved decisions
 
 **Risks**
