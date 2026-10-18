@@ -29,20 +29,30 @@ const loop = (page: Page) =>
 const programs = (page: Page) =>
   page.evaluate(() => (window as unknown as { __iwmsHero: HeroDebug }).__iwmsHero.info().programs);
 
-/** Program count once it has stopped changing (the city compiles asynchronously after ready). */
+/**
+ * Program count once the hero renderer has stopped changing: programs AND geometries unchanged
+ * for 3 s (the city chunk mounts and compiles asynchronously after ready, and may start later
+ * while the Scene 04 chunk loads), so the baseline is never taken mid-mount.
+ */
 async function stablePrograms(page: Page) {
-  let last = await programs(page);
+  const read = () =>
+    page.evaluate(() => {
+      const i = (window as unknown as { __iwmsHero: { info: () => { programs: number; geometries: number } } })
+        .__iwmsHero.info();
+      return `${i.programs}|${i.geometries}`;
+    });
+  let last = await read();
   let since = Date.now();
-  const deadline = since + 20_000;
+  const deadline = since + 40_000;
   while (Date.now() < deadline) {
-    await page.waitForTimeout(150);
-    const now = await programs(page);
+    await page.waitForTimeout(200);
+    const now = await read();
     if (now !== last) {
       last = now;
       since = Date.now();
-    } else if (Date.now() - since >= 1_500) break;
+    } else if (Date.now() - since >= 3_000) break;
   }
-  return last;
+  return Number(last.split('|')[0]);
 }
 
 /** Scroll y where the hero timeline ends (hero-relative). */
@@ -137,7 +147,7 @@ test.describe('hero render loop pauses off-screen (Scene 04 M1)', () => {
         (document.querySelector('.hero__canvas canvas') as HTMLCanvasElement & { __m1?: number }).__m1 = 1;
       });
 
-      // Scroll fully past the hero (beyond the half-viewport resume margin): the loop stops.
+      // Scroll fully past the hero (it pauses as soon as it has entirely left the viewport).
       const below = await page.evaluate(() => {
         const el = document.querySelector<HTMLElement>('section.hero')!;
         return el.offsetTop + el.offsetHeight + window.innerHeight;
@@ -169,9 +179,10 @@ test.describe('hero render loop pauses off-screen (Scene 04 M1)', () => {
       const sameCanvas = await page.evaluate(
         () =>
           (document.querySelector('.hero__canvas canvas') as HTMLCanvasElement & { __m1?: number })
-            .__m1 === 1 && document.querySelectorAll('canvas').length === 1,
+            .__m1 === 1 && document.querySelectorAll('.hero__canvas canvas').length === 1,
       );
-      expect(sameCanvas, 'same single canvas element survives the pause').toBe(true);
+      // The hero's own canvas element (and context) survives; Scene 04's lazy canvas may also exist.
+      expect(sameCanvas, 'same single hero canvas element survives the pause').toBe(true);
       expect(await programs(page), 'no shader programs compiled by pause/resume').toBe(programsBefore);
       expect(errors).toEqual([]);
     });

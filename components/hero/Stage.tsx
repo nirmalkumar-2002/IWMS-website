@@ -251,8 +251,11 @@ function DebugHook({
 }
 
 /**
- * Stops the render loop while the hero section is entirely off-screen and restarts it just before
- * it scrolls back in (half a viewport early, so the first visible frame is already fresh).
+ * Stops the render loop while the hero section is entirely off-screen and restarts it as soon as
+ * any part of it re-enters the viewport. No early margin: the hero's last frame is its static end
+ * hold, so the frame shown at the edge on return is already correct — and Scene 04 never renders
+ * while the hero is still running (measured at the M3 gate: a 50% margin kept the hero rendering
+ * ~60 fps through the first half-viewport of Scene 04).
  * Nothing is torn down: the WebGL context, geometry, textures, compiled programs and the GSAP
  * timeline all stay alive, and scroll keeps driving the rig while paused, so returning shows
  * exactly the state for the current scroll position. Mounted only after the scene is ready.
@@ -262,7 +265,7 @@ function OffscreenPause({ section }: { section: HTMLElement }) {
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => setFrameloop(entry.isIntersecting ? 'always' : 'never'),
-      { rootMargin: '50% 0px 50% 0px' },
+      { rootMargin: '0px' },
     );
     observer.observe(section);
     return () => {

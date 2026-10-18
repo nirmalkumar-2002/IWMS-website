@@ -279,7 +279,7 @@ Each milestone is a separate commit behind its own checkpoint branch.
 
 **Render lifecycle now:**
 - `Stage.tsx` → `OffscreenPause` (mounted once the scene is ready; not in still or reduced‑motion mode).
-  - An `IntersectionObserver` on the hero section, with a half‑viewport margin, switches R3F's frame loop to `never` when the hero is entirely off‑screen and back to `always` before it re‑enters.
+  - An `IntersectionObserver` on the hero section switches R3F's frame loop to `never` when the hero is entirely off‑screen and back to `always` as soon as any part of it re‑enters. *M3 change:* the margin was originally half a viewport; it is now zero, because the gate measured the hero still rendering about 60 fps through the first half‑viewport of Scene 04.
 - **Nothing is recreated.**
   - The WebGL context, canvas element, geometry, textures, compiled programs, post‑processing and the GSAP timeline all stay alive.
   - Lenis/ScrollTrigger keep driving the rig while paused (a few plain-number writes per scroll event), so on return the first frame is the exact state for the current scroll position.
@@ -330,7 +330,7 @@ Each milestone is a separate commit behind its own checkpoint branch.
 - CSS +1.5 KB gzip.
 - 0 images, fonts or canvases.
 - No new dependencies.
-- No render loop: selection is a React state change plus CSS. The hero's render loop pauses once the visitor is half a viewport into the section (M1).
+- No render loop: selection is a React state change plus CSS. The hero's render loop pauses as soon as it has entirely left the viewport (M1, margin tightened in M3).
 
 **Tests.**
 - `tests/ecosystem.spec.ts`:
@@ -352,6 +352,101 @@ Each milestone is a separate commit behind its own checkpoint branch.
 - On wide screens the pinned second 100vh has no scroll‑driven content until M3.
 - Header "Explore platform" still targets the hero's household scene. Retargeting it to `#ecosystem` remains decision D6.
 - The schematic map is decorative. Selection is by tabs, links, or clicking map nodes with a mouse.
+
+## M3 status: miniature 3D city (implemented)
+
+### Step 1: GPU feasibility gate (measured, Intel UHD reference machine, Chromium ANGLE/D3D11)
+
+A minimal second canvas (prototype scene) was measured before the city was built:
+- high 1440×900;
+- medium 1440×900;
+- medium 390×844 viewport.
+
+| Measured | Result |
+|---|---|
+| Scene 04 chunk fetched before approach | no (all three configurations) |
+| Context losses, 10 hero ↔ Scene 04 round trips + 2 resizes | **0** (both canvases) |
+| Scene 04 frames while idle (3 s) | **0** |
+| Scene 04 frames for 4 selections | 4–5 (one per change) |
+| Scene 04 frame cost, CPU+GPU via `gl.finish()` (40 frames) | p95 ≤ 0.3 ms |
+| JS heap before → after | 37.1 → 41.1 MB (high), 38.0 → 37.9 MB (medium), 35.4 → 34.0 MB (390px) |
+| Hero frame interval while Scene 04 loads | medium: max 16.8 ms; high: **one 83 ms frame** |
+| Hero rendering inside Scene 04 (first half‑viewport) | **yes, about 60 fps**, because of M1's 50% margin |
+
+**Not measurable from a page.** Absolute GPU/VRAM use is not exposed to web pages (no API, and the GPU process isn't inspectable from tests). The estimate below is derived from real buffer sizes, not measured:
+- Scene 04 canvas: drawing buffer of slot size (e.g. 932×538 at 1440×900) × (colour + depth) × MSAA ≈ 4–9 MB, plus 0.31 MB of geometry buffers.
+- The hero context stays resident while Scene 04 is shown. It is unchanged from before, and is not freed, by design: freeing it would mean a recompile hitch on return.
+
+**Verdict: pass, with two fixes applied before building.**
+1. The hero pause margin was reduced to 0, so only one canvas renders at a time.
+2. The Scene 04 mount was deferred to `requestIdleCallback`, so parsing and compiling don't compete with a hero frame.
+
+The two‑canvas design (the approved "separate canvas if performance‑safe") is therefore used. The shared‑canvas design (§5.2) remains the fallback if a later device shows memory pressure.
+
+### Step 2–4: the city
+
+**Rendering.**
+- `EcosystemStage` is a lazy chunk (**3.9 KB gzip**, plus the shared 2.1 KB city builder; three.js and R3F are already loaded by the hero).
+- `frameloop="demand"` with `resize={{ scroll: false }}`, so page scrolling never queues frames.
+- MSAA, no post‑processing, no shadow maps, no textures, `flat` (no tone mapping).
+- DPR: high 1–1.5, medium 1–1.25.
+- One `MeshLambertMaterial` with vertex colours: **one merged geometry (one draw call)** plus one transparent highlight plate.
+- Lights: a hemisphere light (soft morning sky) and one warm directional sun. Contact shading is baked with the builder's grime.
+
+**City** (`scene/diorama.ts`, seeded, built once, about 3.2k triangles):
+- A raised concrete island with a bevelled rim, an arterial road, two streets and a residential lane.
+- 01 Collection: a house lane with compound walls and wet and dry bins at every gate.
+- 02 D2D Logistics: a depot yard with an open shed and green collection trucks.
+- 03 Resource Management: a ward office with crew vans.
+- 04 Weighbridge: a transfer station with a truck on the weighbridge deck, a cabin and a canopy.
+- 05 Processing: an MRF shed with skylights and compost windrows.
+- 06 Landfill: a four‑tier engineered cell with an access ramp and a site cabin.
+- 07 Grievances: an apartment block and a small plaza.
+- ICCC: a civic podium with a glazed tower and a mast.
+- Filler: seeded low‑rise blocks and low‑poly trees.
+
+**Camera.** One fixed overview, pitched 38° and yawed −26°, fov 28. The distance is solved by projecting the island's corners to fill about 92% of the slot, recomputed only on resize (portrait aware).
+
+**Labels and selection.**
+- Labels are HTML, positioned from projected anchors and computed only on layout changes, never per frame.
+- They are mouse‑clickable buttons, kept out of the tab order and hidden from assistive technology; the tabs remain the accessible control.
+- Selection moves the single amber plate and re‑styles the labels (one frame).
+
+**Layout (≥ 1280 × 820, pinned).**
+- The intro and module list sit in the left column.
+- The city fills the main area, with the information panel as a fixed‑height three‑part row beneath it (overview · capabilities · benefit and connections). Because the row height is fixed, switching modules never resizes the 3D view.
+- Smaller or shorter screens use the M2 natural‑flow layout.
+
+**Fallbacks.**
+- The SVG schematic stays until the first compiled frame and returns on:
+  - WebGL context loss;
+  - a stage error, via an error boundary (chunk load, renderer creation);
+  - a compile failure.
+- Never loaded (the schematic is shown) on the poster tier, under reduced motion, or without JS.
+- Tier detection runs only when the visitor approaches Scene 04.
+
+**Observed** (production build, Intel UHD):
+- 2 draw calls, 3,190 triangles, 0 textures, 2 programs, 0.31 MB of buffers.
+- Frame cost p95 ≤ 0.2 ms at 1440×900 (932×538 drawing buffer) and at 1920×1080 (1400×712).
+- 0 idle frames, 0 frames while the page scrolls.
+- The hero is `never` inside Scene 04.
+- No context loss and no new programs on interaction.
+
+### Code review fixes applied (independent reviewer)
+- **Reduced motion on desktop:** the schematic slot no longer collapses to 0 px; it keeps its aspect ratio.
+- **Error boundary:** added around the lazy stage.
+- **Stable city size:** the fixed‑height panel row keeps the city from re‑fitting on selection.
+- **Map click:** clicking a zone label selects it again.
+- **Compile failure:** `compileAsync` failure falls back to the schematic.
+- **Canvas accessibility:** the canvas is hidden from assistive technology.
+- **Tier detection:** deferred until approach.
+
+### Limitations and M4 work
+- No camera motion yet. Focus moves, animated connections between zones and portrait camera keys are M4, as planned.
+- The pinned second 100vh is still unused by 3D. The M4/M5 rise hand‑off from Scene 03 will use it.
+- With `KHR_parallel_shader_compile`, three's `compileAsync` keeps polling after a context loss during compile (reviewer finding 5). Harmless; the stage falls back.
+- Real mobile GPUs were not available. The 390×844 checks used this desktop GPU with a medium tier.
+- Label overlap at narrow widths (Resources / D2D Logistics / Grievances are close together) should be handled in M4 with the portrait camera key.
 
 ## 12. Risks and unresolved decisions
 

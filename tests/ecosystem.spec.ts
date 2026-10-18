@@ -179,8 +179,8 @@ test.describe('Scene 04 ecosystem (M2)', () => {
     const brochure = await page.request.get(siteConfig.brochurePath);
     expect(brochure.status()).toBe(200);
 
-    // Performance: no extra canvas; still exactly one WebGL canvas (the hero's).
-    expect(await page.locator('canvas').count()).toBe(1);
+    // At most the hero's canvas plus the lazily loaded Scene 04 city (M3); never more.
+    expect(await page.locator('canvas').count()).toBeLessThanOrEqual(2);
     expect(errors).toEqual([]);
   });
 
@@ -195,7 +195,7 @@ test.describe('Scene 04 ecosystem (M2)', () => {
     const before = await page.evaluate(
       () => ({ ...(window as unknown as { __iwmsHero: HeroDebug }).__iwmsHero.rig }) as Record<string, number>,
     );
-    // Deep into the section (past the hero's half-viewport resume margin).
+    // Deep into the section (the hero has entirely left the viewport).
     const vh = await page.evaluate(() => innerHeight);
     await scrollTo(page, end + vh * 2);
     await expect
@@ -281,13 +281,143 @@ test.describe('Scene 04 ecosystem (M2)', () => {
   });
 });
 
+interface EcoDebug {
+  frames: () => number;
+  info: () => { calls: number; triangles: number; textures: number; programs: number; contextLost: boolean };
+}
+const eco = (page: Page) =>
+  page.evaluate(() => {
+    const e = (window as unknown as { __iwmsEco?: EcoDebug }).__iwmsEco;
+    return e ? { frames: e.frames(), ...e.info() } : null;
+  });
+const heroLoop = (page: Page) =>
+  page.evaluate(() => (window as unknown as { __iwmsHero: HeroDebug }).__iwmsHero.loop());
+const heroBottomY = (page: Page) =>
+  page.evaluate(() => {
+    const el = document.querySelector<HTMLElement>('section.hero')!;
+    return el.offsetTop + el.offsetHeight;
+  });
+
+test.describe('Scene 04 3D city (M3)', () => {
+  test.describe.configure({ timeout: 150_000 });
+
+  for (const quality of ['high', 'medium'] as const) {
+    test(`${quality}: lazy, on-demand, one renderer at a time, interactions recompile nothing`, async ({
+      page,
+    }) => {
+      const errors = watch(page);
+      const requests: string[] = [];
+      page.on('request', (r) => requests.push(r.url()));
+      await openCinematic(page, quality);
+      // Not fetched while the visitor is in the hero.
+      await page.waitForTimeout(1_000);
+      expect(requests.filter((u) => /EcosystemStage/.test(u))).toEqual([]);
+      expect(await page.locator('#ecosystem canvas').count()).toBe(0);
+
+      // Into Scene 04: the city loads, compiles, shows; the hero stops rendering.
+      const heroBottom = await heroBottomY(page);
+      await scrollTo(page, heroBottom + 40);
+      await expect(page.locator('.eco__slot')).toHaveAttribute('data-stage', 'ready', { timeout: 30_000 });
+      expect(requests.filter((u) => /EcosystemStage/.test(u)).length).toBe(1);
+      expect(await page.locator('canvas').count()).toBe(2);
+      await expect.poll(async () => (await heroLoop(page)).frameloop).toBe('never');
+      await expect(page.locator('.eco__label')).toHaveCount(8);
+      await expect(page.locator('.eco__labels')).toHaveAttribute('aria-hidden', 'true');
+
+      // Budget (M3): ≤ 4 draw calls, ≤ 20k triangles, no textures; no frames while idle.
+      const idle = (await eco(page))!;
+      expect(idle.calls).toBeLessThanOrEqual(4);
+      expect(idle.triangles).toBeLessThanOrEqual(20_000);
+      expect(idle.textures).toBe(0);
+      await page.waitForTimeout(1_500);
+      expect((await eco(page))!.frames, 'no idle frames').toBe(idle.frames);
+      const heroFrames = (await heroLoop(page)).frames;
+
+      // Selections: about one frame each, no shader compiles; the label follows the selection.
+      for (const [id, text] of [
+        ['weighbridge', /WEIGHBRIDGE/i],
+        ['landfill', /LANDFILL/i],
+        ['iccc', /ICCC/i],
+      ] as const) {
+        await page.locator(`#eco-tab-${id}`).click();
+        await expect(page.locator('.eco__label[data-state="selected"]')).toHaveText(text);
+      }
+      // Let the frames those selections requested actually render before reading the counter.
+      let settled = (await eco(page))!.frames;
+      await expect
+        .poll(async () => {
+          const now = (await eco(page))!.frames;
+          const same = now === settled;
+          settled = now;
+          return same;
+        }, { intervals: [300], timeout: 5_000 })
+        .toBe(true);
+      const after = (await eco(page))!;
+      // On-demand: changes requested within one animation frame coalesce, so a burst of three
+      // selections costs at least one and only a handful of frames (never a continuous loop).
+      expect(after.frames - idle.frames).toBeGreaterThanOrEqual(1);
+      expect(after.frames - idle.frames).toBeLessThanOrEqual(8);
+      expect(after.programs).toBe(idle.programs);
+      expect(after.contextLost).toBe(false);
+      expect((await heroLoop(page)).frames, 'hero stays paused during Scene 04 use').toBe(heroFrames);
+
+      // Back to the hero: it resumes; the idle city renders nothing meanwhile.
+      const ecoFrames = after.frames;
+      await scrollTo(page, heroBottom - (await page.evaluate(() => innerHeight)));
+      await expect.poll(async () => (await heroLoop(page)).frameloop).toBe('always');
+      await page.waitForTimeout(1_000);
+      // At most one late-settling frame from the selections above, then strictly nothing:
+      // the city never renders in a loop while the hero is on screen.
+      const settledFrames = (await eco(page))!.frames;
+      expect(settledFrames - ecoFrames).toBeLessThanOrEqual(1);
+      await page.waitForTimeout(1_500);
+      expect((await eco(page))!.frames, 'no city frames while the hero is shown').toBe(settledFrames);
+      expect(errors).toEqual([]);
+    });
+  }
+
+  test('WebGL context loss falls back to the schematic; the interface keeps working', async ({ page }) => {
+    await openCinematic(page, 'medium');
+    await scrollTo(page, (await heroBottomY(page)) + 40);
+    await expect(page.locator('.eco__slot')).toHaveAttribute('data-stage', 'ready', { timeout: 30_000 });
+    await page.evaluate(() => {
+      const c = document.querySelector<HTMLCanvasElement>('#ecosystem canvas')!;
+      (c.getContext('webgl2') ?? c.getContext('webgl'))!.getExtension('WEBGL_lose_context')!.loseContext();
+    });
+    await expect(page.locator('.eco__slot')).toHaveAttribute('data-stage', 'failed');
+    await expect(page.locator('#ecosystem canvas')).toHaveCount(0);
+    await expect(page.locator('.eco__map')).toBeVisible();
+    await page.locator('#eco-tab-processing').click();
+    expect(await visiblePanels(page)).toEqual(['eco-processing']);
+    await expect(page.locator('.eco__map-node[data-state="selected"]')).toHaveCount(1);
+  });
+
+  test.describe('reduced motion', () => {
+    test.use({ reducedMotion: 'reduce' });
+    test('never loads the 3D city; the schematic is shown', async ({ page }) => {
+      const requests: string[] = [];
+      page.on('request', (r) => requests.push(r.url()));
+      await page.goto('/?quality=high');
+      await expect(page.locator('#ecosystem')).toHaveAttribute('data-enhanced', 'true');
+      await page.locator('#ecosystem').scrollIntoViewIfNeeded();
+      await page.waitForTimeout(2_000);
+      expect(requests.filter((u) => /EcosystemStage/.test(u))).toEqual([]);
+      await expect(page.locator('.eco__slot')).toHaveAttribute('data-stage', 'off');
+      await expect(page.locator('.eco__map')).toBeVisible();
+    });
+  });
+});
+
 test.describe('Scene 04 on the static poster tier @software', () => {
   test('interface works without WebGL', async ({ page }) => {
+    const requests: string[] = [];
+    page.on('request', (r) => requests.push(r.url()));
     await page.goto('/');
     await expect(page.locator('section.hero')).toHaveClass(/\bhero--static\b/, { timeout: 30_000 });
     await expect(page.locator('#ecosystem')).toHaveAttribute('data-enhanced', 'true');
     await page.locator('#eco-tab-grievance').click();
     expect(await visiblePanels(page)).toEqual(['eco-grievance']);
     expect(await page.locator('canvas').count()).toBe(0);
+    expect(requests.filter((u) => /EcosystemStage/.test(u))).toEqual([]);
   });
 });
