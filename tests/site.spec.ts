@@ -365,10 +365,12 @@ test.describe('site header, cinematic', () => {
     const t0 = Date.now();
     await skip(page).click();
     await page.waitForFunction(
-      (frac) =>
-        Math.abs(
-          window.scrollY - frac * (document.documentElement.scrollHeight - window.innerHeight),
-        ) <= 2,
+      (frac) => {
+        // The hero timeline spans the hero section's own scroll range (not the document's).
+        const hero = document.querySelector<HTMLElement>('section.hero')!;
+        const y = hero.offsetTop + frac * (hero.offsetHeight - window.innerHeight);
+        return Math.abs(window.scrollY - y) <= 2;
+      },
       endFrac,
       { timeout: 1_500 },
     );

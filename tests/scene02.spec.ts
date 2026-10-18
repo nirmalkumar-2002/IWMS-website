@@ -54,10 +54,15 @@ const snapshot = (page: Page) =>
     };
   });
 
+/**
+ * Scroll y at which the hero's timeline ends (its section's bottom meets the viewport bottom).
+ * Hero-relative, not document-relative, so content added after the hero can't shift samples.
+ */
 const maxScroll = (page: Page) =>
-  page.evaluate(
-    () => document.documentElement.scrollHeight - window.innerHeight,
-  );
+  page.evaluate(() => {
+    const hero = document.querySelector<HTMLElement>('section.hero')!;
+    return hero.offsetTop + hero.offsetHeight - window.innerHeight;
+  });
 
 /** Polls the rig until distance/cityU are unchanged for ~300 ms; returns the settled state. */
 async function settle(page: Page, timeout = 15_000): Promise<Snapshot> {

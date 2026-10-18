@@ -48,10 +48,15 @@ const state = (page: Page) =>
     return { truck: h.truck(), world: h.truckWorld(), cityU: h.rig.cityU };
   });
 
+/**
+ * Scroll y at which the hero's timeline ends (its section's bottom meets the viewport bottom).
+ * Hero-relative, not document-relative, so content added after the hero can't shift samples.
+ */
 const maxScroll = (page: Page) =>
-  page.evaluate(
-    () => document.documentElement.scrollHeight - window.innerHeight,
-  );
+  page.evaluate(() => {
+    const hero = document.querySelector<HTMLElement>('section.hero')!;
+    return hero.offsetTop + hero.offsetHeight - window.innerHeight;
+  });
 
 async function scrollToY(page: Page, y: number) {
   await page.evaluate((top) => window.scrollTo(0, top), Math.round(y));

@@ -138,11 +138,15 @@ function DebugHook({
 }) {
   const gl = useThree((s) => s.gl);
   const camera = useThree((s) => s.camera);
+  const getState = useThree((s) => s.get);
   const debug = useRef(false);
   const frame = useRef({ calls: 0, triangles: 0 });
+  /** Frames the loop has run (QA: proves the off-screen pause renders nothing). */
+  const frames = useRef(0);
   // Post-processing renders several passes per frame, so accumulate info across the frame.
   useFrame(() => {
     if (!debug.current) return;
+    frames.current++;
     frame.current = { calls: gl.info.render.calls, triangles: gl.info.render.triangles };
     gl.info.reset();
   }, -1);
@@ -227,6 +231,8 @@ function DebugHook({
           }),
         };
       },
+      /** Render-loop state: frames run so far and the current R3F frameloop mode. */
+      loop: () => ({ frames: frames.current, frameloop: getState().frameloop }),
       info: () => ({
         calls: frame.current.calls,
         triangles: frame.current.triangles,
@@ -240,7 +246,30 @@ function DebugHook({
       gl.info.autoReset = true;
       delete target.__iwmsHero;
     };
-  }, [rig, refs, hud, gl, camera]);
+  }, [rig, refs, hud, gl, camera, getState]);
+  return null;
+}
+
+/**
+ * Stops the render loop while the hero section is entirely off-screen and restarts it just before
+ * it scrolls back in (half a viewport early, so the first visible frame is already fresh).
+ * Nothing is torn down: the WebGL context, geometry, textures, compiled programs and the GSAP
+ * timeline all stay alive, and scroll keeps driving the rig while paused, so returning shows
+ * exactly the state for the current scroll position. Mounted only after the scene is ready.
+ */
+function OffscreenPause({ section }: { section: HTMLElement }) {
+  const setFrameloop = useThree((s) => s.setFrameloop);
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => setFrameloop(entry.isIntersecting ? 'always' : 'never'),
+      { rootMargin: '50% 0px 50% 0px' },
+    );
+    observer.observe(section);
+    return () => {
+      observer.disconnect();
+      setFrameloop('always');
+    };
+  }, [section, setFrameloop]);
   return null;
 }
 
@@ -370,6 +399,7 @@ export default function Stage({
           {!still && <CityLightPool refs={refs} count={quality === 'high' ? 3 : 2} />}
           {!still && <CollectionDirector rig={rig} hud={hud} />}
           <DebugHook rig={rig} refs={refs} hud={hud} />
+          {ready && !still && <OffscreenPause section={section} />}
           {quality === 'high' && <Effects />}
           <ReadySignal
             onReady={() => {

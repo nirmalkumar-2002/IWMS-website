@@ -165,11 +165,12 @@ test.describe('cinematic', () => {
       .poll(() => opacities(page, '.hero__word, .hero__positioning'), { timeout: 5_000 })
       .toEqual(Array(TITLE_WORDS.length + 1).fill(1));
 
-    // Scroll to the bottom (end of Phase 3.1, past Scene 02): Scene 01 copy and the city copy
-    // are both clear.
-    await page.evaluate(() =>
-      window.scrollTo(0, document.documentElement.scrollHeight),
-    );
+    // Scroll to the end of the hero (end of Phase 3, past Scene 02): Scene 01 copy and the city
+    // copy are both clear. Hero-relative, so content after the hero can't change the target.
+    await page.evaluate(() => {
+      const hero = document.querySelector<HTMLElement>('section.hero')!;
+      window.scrollTo(0, hero.offsetTop + hero.offsetHeight - window.innerHeight);
+    });
     await page.waitForTimeout(3_000);
     await expect
       .poll(() => opacities(page, '.hero__word, .hero__positioning, .hero__subtitle'), {
