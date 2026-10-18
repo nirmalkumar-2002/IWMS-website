@@ -32,6 +32,9 @@ const EcosystemStage = lazy(() => import('./EcosystemStage'));
 type StageState = 'off' | 'wanted' | 'ready' | 'failed';
 /** A rectangle covered by UI overlaid on the slot (CSS px, relative to the slot's top-left). */
 type Obstacle = { x: number; y: number; w: number; h: number };
+/** Where the stage wants the floating popup (mirrors the stage's PopupPlacement contract). */
+type PopupPlacement = { x: number; y: number; side: 'left' | 'right' };
+type PopupSize = { w: number; h: number };
 
 /** Any failure of the lazy stage (chunk load, renderer creation, build) falls back to the schematic. */
 class StageBoundary extends Component<
@@ -59,6 +62,10 @@ const HIGHLIGHTS = 2;
 /** Marks UI overlaid on the slot; measured and passed to the stage as obstacles. */
 const OVERLAY_ATTR = 'data-eco-overlay';
 const NO_OBSTACLES: ReadonlyArray<Obstacle> = [];
+/** The popup floats on the city from this width up (phones keep the summary below the city). */
+const WIDE_QUERY = '(min-width: 768px)';
+/** Exit fade of the popup (matches ecosystem.css). */
+const POPUP_EXIT_MS = 200;
 
 const tabId = (id: EcosystemNodeId) => `eco-tab-${id}`;
 const panelId = (id: EcosystemNodeId) => `eco-${id}`;
@@ -162,13 +169,38 @@ export default function EcosystemSection() {
   const tablistRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
   const viewRef = useRef<HTMLDivElement>(null);
+  const stageCardRef = useRef<HTMLDivElement>(null);
   const slotRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
   const [stage, setStage] = useState<StageState>('off');
   const [tier, setTier] = useState<'high' | 'medium' | null>(null);
   const [obstacles, setObstacles] =
     useState<ReadonlyArray<Obstacle>>(NO_OBSTACLES);
   const obstacleKey = useRef('[]');
+  // M4.2 floating popup. `wide`: the viewport floats it (>=768px). `popupSize`: measured size of
+  // the selected module's popup (from a hidden twin, so it is known before the popup opens).
+  // `placement`: the stage's last placement; `placed`: whether it is current (false = overview).
+  // `dismissed`: closed with the x button (selection and camera kept). `closing`: exit fade.
+  // `movable`: the popup has been shown for a frame, so later placement changes glide.
+  const [wide, setWide] = useState(false);
+  const [popupSize, setPopupSize] = useState<PopupSize | null>(null);
+  const [placement, setPlacement] = useState<PopupPlacement | null>(null);
+  const [placed, setPlaced] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [movable, setMovable] = useState(false);
+  const closeTimer = useRef(0);
   useEffect(() => setEnhanced(true), []);
+
+  useEffect(() => {
+    if (!enhanced) return;
+    const mq = window.matchMedia(WIDE_QUERY);
+    const sync = () => setWide(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, [enhanced]);
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
 
   // Load the 3D stage only for capable tiers, without reduced motion, and only once the section
   // is within one viewport of being seen.
@@ -200,16 +232,17 @@ export default function EcosystemSection() {
   );
   const onStageLost = useCallback(() => setStage('failed'), []);
 
-  // Obstacles for the stage: every element marked as overlaid (hint chip, floating summary)
-  // that actually covers the slot, clipped to it, in integer CSS px relative to the slot. Only
-  // a real change produces a new array (the stage reframes on change).
+  // Obstacles for the stage: every element overlaid on the stage card (hint chip, overview
+  // button) that actually covers the slot, clipped to it, in integer CSS px relative to the slot.
+  // The popup is not an obstacle (the stage places it and keeps hotspots clear of it itself).
+  // Only a real change produces a new array (the stage reframes on change).
   useLayoutEffect(() => {
     if (!enhanced) return;
-    const view = viewRef.current;
+    const card = stageCardRef.current;
     const slot = slotRef.current;
-    if (!view || !slot) return;
+    if (!card || !slot) return;
     const overlays = [
-      ...view.querySelectorAll<HTMLElement>(`[${OVERLAY_ATTR}]`),
+      ...card.querySelectorAll<HTMLElement>(`[${OVERLAY_ATTR}]`),
     ];
     const measure = () => {
       const sr = slot.getBoundingClientRect();
@@ -242,6 +275,41 @@ export default function EcosystemSection() {
     return () => ro.disconnect();
   }, [enhanced, focused, selected, stage]);
 
+  // Popup size: the hidden twin of the selected module's popup has the popup's exact layout, so
+  // its size is known (and handed to the stage) before the popup opens. Integer px; state only
+  // changes on a real change. Phones never float the popup (null).
+  const measuring =
+    enhanced && wide && (stage === 'wanted' || stage === 'ready');
+  useLayoutEffect(() => {
+    const el = measureRef.current;
+    if (!measuring || !el) {
+      setPopupSize((prev) => (prev === null ? prev : null));
+      return;
+    }
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      const w = Math.ceil(r.width);
+      const h = Math.ceil(r.height);
+      setPopupSize((prev) =>
+        prev && prev.w === w && prev.h === h ? prev : w && h ? { w, h } : null,
+      );
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [measuring, selected]);
+
+  const onPopupPlace = useCallback((p: PopupPlacement | null) => {
+    setPlaced(p !== null);
+    if (!p) return;
+    setPlacement((prev) =>
+      prev && prev.x === p.x && prev.y === p.y && prev.side === p.side
+        ? prev
+        : { x: p.x, y: p.y, side: p.side },
+    );
+  }, []);
+
   // Keep the selected pill visible in the horizontally scrolling (mobile) tab row without
   // scrolling the page itself.
   useEffect(() => {
@@ -255,9 +323,14 @@ export default function EcosystemSection() {
       list.scrollLeft = right - list.clientWidth + 16;
   }, [selected, enhanced]);
 
+  /** Any selection (pill, hotspot, schematic node, Connected-to) focuses the city and
+   *  (re)opens the popup. */
   const select = useCallback((id: EcosystemNodeId, focus = false) => {
     setSelected(id);
     setFocused(true);
+    setDismissed(false);
+    window.clearTimeout(closeTimer.current);
+    setClosing(false);
     if (focus) tabs.current[id]?.focus();
   }, []);
   const onStageSelect = useCallback(
@@ -265,10 +338,68 @@ export default function EcosystemSection() {
     [select],
   );
 
+  const ready = stage === 'ready';
+  /** The popup should float: >=768px, live 3D stage, a focused module, not dismissed. */
+  const wantPopup = enhanced && wide && ready && focused && !dismissed;
+  /** The selected summary is rendered as the floating popup (shown, or fading out). */
+  const float = (wantPopup && placed && placement !== null) || closing;
+  const popupShown = float && !closing;
+
+  // A newly shown popup appears in place; only later placement changes glide.
+  useEffect(() => {
+    if (!popupShown) {
+      setMovable(false);
+      return;
+    }
+    let raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(() => setMovable(true));
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [popupShown]);
+
+  /** Fade the popup out (if shown) before the summary returns to the flow below the city. */
+  const fadePopup = () => {
+    if (!popupShown) return;
+    setClosing(true);
+    window.clearTimeout(closeTimer.current);
+    const reduce = window.matchMedia(
+      '(prefers-reduced-motion: reduce)',
+    ).matches;
+    closeTimer.current = window.setTimeout(
+      () => setClosing(false),
+      reduce ? 0 : POPUP_EXIT_MS,
+    );
+  };
+  /** The popup's close button: dismiss it, keep the selection and the focused camera. */
+  const closePopup = () => {
+    fadePopup();
+    setDismissed(true);
+    tabs.current[selected]?.focus();
+  };
   const returnToOverview = () => {
+    fadePopup();
     setFocused(false);
     tabs.current[selected]?.focus();
   };
+
+  // Escape inside the (non-modal) popup closes it.
+  const closePopupRef = useRef(closePopup);
+  useEffect(() => {
+    closePopupRef.current = closePopup;
+  });
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!enhanced || !view) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      const target = e.target as Element | null;
+      if (!target?.closest('.eco__popup[data-eco-popup="open"]')) return;
+      e.preventDefault();
+      closePopupRef.current();
+    };
+    view.addEventListener('keydown', onKey);
+    return () => view.removeEventListener('keydown', onKey);
+  }, [enhanced]);
 
   const toggleDetails = () => {
     const open = !detailsOpen;
@@ -313,9 +444,6 @@ export default function EcosystemSection() {
     select(to, true);
   };
 
-  const ready = stage === 'ready';
-  /** The compact summary floats on the city (≥768px, see CSS) only over the live 3D stage. */
-  const floating = enhanced && ready && focused;
   const demo = demoRequestLink();
   const pillContent = (n: EcosystemNode) => (
     <>
@@ -347,11 +475,65 @@ export default function EcosystemSection() {
     </span>
   );
 
+  /** Compact summary content (tag, title, ICCC note, summary, highlights, View details).
+   *  `twin`: the inert, hidden copy used only to measure the popup's size. */
+  const summaryBody = (n: EcosystemNode, twin = false) => (
+    <>
+      <div className="eco__summary-main">
+        <p className="eco__card-tag">
+          {n.kind === 'module'
+            ? `${c.moduleTag} ${n.number}`
+            : c.integrationTag}
+          <span className="eco__card-place"> · {n.place}</span>
+        </p>
+        {twin ? (
+          <p className="eco__card-title">{n.name}</p>
+        ) : (
+          <h3 className="eco__card-title">{n.name}</h3>
+        )}
+        {n.kind === 'integration' && (
+          <p className="eco__card-note">{c.integrationNote}</p>
+        )}
+        <p className="eco__card-summary">{n.summary}</p>
+      </div>
+      {enhanced && (
+        <div className="eco__summary-aside">
+          <ul className="eco__highlights" aria-label={s.highlightsLabel}>
+            {n.capabilities.slice(0, HIGHLIGHTS).map((cap) => (
+              <li key={cap}>{cap}</li>
+            ))}
+          </ul>
+          <div className="eco__summary-actions">
+            {twin ? (
+              <span className="eco__twin-btn">
+                {s.detailsLabel}
+                <Glyph d={ICON_CHEVRON} />
+              </span>
+            ) : (
+              <button
+                type="button"
+                ref={(el) => void (detailBtns.current[n.id] = el)}
+                className="eco__details-btn"
+                aria-expanded={detailsOpen}
+                aria-controls={detailsId(n.id)}
+                onClick={toggleDetails}
+              >
+                {s.detailsLabel}
+                <Glyph d={ICON_CHEVRON} />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+
   const card = (n: EcosystemNode) => {
     const id = n.id;
     const isSel = id === selected;
     const hidden = enhanced && !isSel;
     const showDetails = !enhanced || detailsOpen;
+    const isPopup = isSel && float;
     return (
       <article
         key={id}
@@ -363,56 +545,30 @@ export default function EcosystemSection() {
           : {})}
         hidden={hidden}
       >
-        <div
-          className="eco__summary"
-          {...(floating && isSel ? { [OVERLAY_ATTR]: '' } : {})}
-        >
-          <div className="eco__summary-main">
-            <p className="eco__card-tag">
-              {n.kind === 'module'
-                ? `${c.moduleTag} ${n.number}`
-                : c.integrationTag}
-              <span className="eco__card-place"> · {n.place}</span>
-            </p>
-            <h3 className="eco__card-title">{n.name}</h3>
-            {n.kind === 'integration' && (
-              <p className="eco__card-note">{c.integrationNote}</p>
-            )}
-            <p className="eco__card-summary">{n.summary}</p>
+        {isPopup && placement ? (
+          <div
+            className="eco__summary eco__popup"
+            data-eco-popup={closing ? 'closing' : 'open'}
+            data-side={placement.side}
+            data-move={movable ? 'on' : 'off'}
+            style={{
+              transform: `translate(${placement.x}px, ${placement.y}px)`,
+            }}
+            {...(closing ? {} : { [OVERLAY_ATTR]: '' })}
+          >
+            {summaryBody(n)}
+            <button
+              type="button"
+              className="eco__popup-close"
+              aria-label={s.closePopupLabel(n.label)}
+              onClick={closePopup}
+            >
+              <Glyph d={ICON_CLOSE} />
+            </button>
           </div>
-          {enhanced && (
-            <div className="eco__summary-aside">
-              <ul className="eco__highlights" aria-label={s.highlightsLabel}>
-                {n.capabilities.slice(0, HIGHLIGHTS).map((cap) => (
-                  <li key={cap}>{cap}</li>
-                ))}
-              </ul>
-              <div className="eco__summary-actions">
-                <button
-                  type="button"
-                  ref={(el) => void (detailBtns.current[id] = el)}
-                  className="eco__details-btn"
-                  aria-expanded={detailsOpen}
-                  aria-controls={detailsId(id)}
-                  onClick={toggleDetails}
-                >
-                  {s.detailsLabel}
-                  <Glyph d={ICON_CHEVRON} />
-                </button>
-                {ready && focused && isSel && (
-                  <button
-                    type="button"
-                    className="eco__overview-btn"
-                    onClick={returnToOverview}
-                  >
-                    <Glyph d={ICON_OVERVIEW} />
-                    {s.overviewLabel}
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+        ) : (
+          <div className="eco__summary">{summaryBody(n)}</div>
+        )}
 
         <div
           id={detailsId(id)}
@@ -541,10 +697,10 @@ export default function EcosystemSection() {
         <div
           ref={viewRef}
           className="eco__view"
-          data-float={floating ? 'true' : 'false'}
+          data-float={float ? 'true' : 'false'}
           data-details={enhanced && detailsOpen ? 'open' : 'closed'}
         >
-          <div className="eco__stage-card">
+          <div ref={stageCardRef} className="eco__stage-card">
             <div ref={slotRef} className="eco__slot" data-stage={stage}>
               <EcosystemMap
                 selected={enhanced ? selected : null}
@@ -558,6 +714,10 @@ export default function EcosystemSection() {
                       selected={selected}
                       focused={focused}
                       obstacles={obstacles}
+                      // Dismissed: no popup column, so the camera re-centres the zone.
+                      popupSize={wide && !dismissed ? popupSize : null}
+                      popupOpen={popupShown}
+                      onPopupPlace={onPopupPlace}
                       onSelect={onStageSelect}
                       onReady={onStageReady}
                       onLost={onStageLost}
@@ -572,11 +732,34 @@ export default function EcosystemSection() {
                 {s.hint}
               </p>
             )}
+            {enhanced && ready && focused && (
+              <button
+                type="button"
+                className="eco__overview-btn"
+                onClick={returnToOverview}
+                {...{ [OVERLAY_ATTR]: '' }}
+              >
+                <Glyph d={ICON_OVERVIEW} />
+                {s.overviewLabel}
+              </button>
+            )}
           </div>
 
           <div className="eco__panels">
             {ORDER.map((id) => card(ECOSYSTEM_BY_ID[id]))}
           </div>
+
+          {measuring && (
+            <div
+              ref={measureRef}
+              className="eco__popup-twin"
+              data-kind={ECOSYSTEM_BY_ID[selected].kind}
+              aria-hidden="true"
+              inert
+            >
+              {summaryBody(ECOSYSTEM_BY_ID[selected], true)}
+            </div>
+          )}
         </div>
 
         <p className="eco__note">

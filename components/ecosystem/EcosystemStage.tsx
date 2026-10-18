@@ -30,17 +30,36 @@ export interface Rect {
   h: number;
 }
 
+export interface PopupPlacement {
+  /** Top-left of the popup in slot CSS px (clamped inside the slot, clear of the selected zone). */
+  x: number;
+  y: number;
+  /** Which side of the selected zone the popup sits on. */
+  side: 'left' | 'right';
+}
+
 export interface StageProps {
   quality: 'high' | 'medium';
   selected: EcosystemNodeId;
   /** true = camera focused on the selected zone; false = city overview. */
   focused: boolean;
   /**
-   * Rectangles covered by UI overlaid on the slot, in CSS px relative to the slot's top-left.
-   * Hotspots are kept out of them; when focused the camera frames the selected zone in the free
-   * area beside them.
+   * Other UI overlaid on the slot (hint chip, overview button), in CSS px relative to the slot's
+   * top-left. Hotspots are kept out of them; they never move the camera.
    */
   obstacles?: ReadonlyArray<Rect>;
+  /**
+   * Size of the floating popup (CSS px) where one is floated; null = none (phones). While
+   * focused, the camera keeps a column free for it beside the zone (from its width only).
+   */
+  popupSize?: { w: number; h: number } | null;
+  /** Whether the popup is shown: hotspots avoid it only while open. */
+  popupOpen?: boolean;
+  /**
+   * Where the popup goes, computed from the camera's TARGET pose (so it is known as the move
+   * starts). Called on selection, focus, popup size and viewport changes; null = no popup.
+   */
+  onPopupPlace?: (p: PopupPlacement | null) => void;
   onSelect: (id: EcosystemNodeId) => void;
   onReady: () => void;
   onLost: () => void;
@@ -128,6 +147,9 @@ const DOT = 7;
 const LABEL_GAP = 9;
 /** Keep hotspots clear of the slot edges and its corner brackets. */
 const EDGE = 14;
+/** Popup clearance (CSS px) from the slot edges and from the selected zone. */
+const POP_EDGE = 16;
+const POP_GAP = 24;
 
 interface Pose {
   px: number;
@@ -144,28 +166,13 @@ type Box = { l: number; t: number; r: number; b: number };
 
 const hit = (a: Box, b: Box) => a.l < b.r && a.r > b.l && a.t < b.b && a.b > b.t;
 
-/** The largest part of the slot left free by the (large) overlays, minus a small margin. */
-function freeArea(w: number, h: number, obstacles: ReadonlyArray<Rect>): Box {
-  let f: Box = { l: 0, t: 0, r: w, b: h };
-  for (const o of obstacles) {
-    if (o.w * o.h < 0.04 * w * h) continue; // small chips only affect hotspots, not framing
-    const pad = 12;
-    const options: Box[] = [
-      { ...f, l: Math.max(f.l, o.x + o.w + pad) },
-      { ...f, r: Math.min(f.r, o.x - pad) },
-      { ...f, t: Math.max(f.t, o.y + o.h + pad) },
-      { ...f, b: Math.min(f.b, o.y - pad) },
-    ];
-    const area = (x: Box) => Math.max(0, x.r - x.l) * Math.max(0, x.b - x.t);
-    f = options.reduce((best, x) => (area(x) > area(best) ? x : best));
-  }
-  return f;
-}
-
 function City({
   selected,
   focused,
   obstacles,
+  popupSize,
+  popupOpen = false,
+  onPopupPlace,
   onReady,
   onLost,
   overlay,
@@ -202,6 +209,71 @@ function City({
   const labelSize = useRef({ dirty: true, sizes: {} as Partial<Record<EcosystemNodeId, [number, number]>> });
   const tmp = useMemo(() => new Vector3(), []);
   const scratch = useMemo(() => new PerspectiveCamera(28, 1, 1, 800), []);
+  // Popup: its width drives the camera (stable per breakpoint); its height only its placement.
+  const popW = popupSize ? Math.round(popupSize.w) : 0;
+  const popH = popupSize ? Math.round(popupSize.h) : 0;
+  const pop = useRef({ w: 0, h: 0, open: false, rect: null as Box | null, last: '' });
+  pop.current.w = popW;
+  pop.current.h = popH;
+  pop.current.open = popupOpen;
+  const placeCb = useRef(onPopupPlace);
+  placeCb.current = onPopupPlace;
+
+  /** Side of the zone the popup takes: towards the island centre, i.e. the side with more city. */
+  const popupSide = (id: EcosystemNodeId): 'left' | 'right' => (d.zones[id].x <= d.center[0] ? 'right' : 'left');
+  /** Area the focused zone is framed in: the slot minus the popup's column (if any). */
+  const focusArea = (w: number, h: number, id: EcosystemNodeId): Box => {
+    const col = pop.current.w ? pop.current.w + POP_EDGE + POP_GAP : 0;
+    if (!col || col > w * 0.5) return { l: 0, t: 0, r: w, b: h };
+    return popupSide(id) === 'right' ? { l: 0, t: 0, r: w - col, b: h } : { l: col, t: 0, r: w, b: h };
+  };
+  /** Popup placement for a pose: beside the zone's projected footprint, clamped in the slot. */
+  const placement = (to: Pose, id: EcosystemNodeId): PopupPlacement | null => {
+    const { w: pw, h: ph } = pop.current;
+    if (!mode.current.focused || !pw || !ph) return null;
+    const w = Math.max(1, size.width);
+    const h = Math.max(1, size.height);
+    scratch.aspect = w / h;
+    scratch.position.set(to.px, to.py, to.pz);
+    scratch.lookAt(to.tx, to.ty, to.tz);
+    scratch.updateMatrixWorld();
+    scratch.setViewOffset(w, h, to.ox, to.oy, w, h);
+    scratch.updateProjectionMatrix();
+    const z = d.zones[id];
+    const top = d.anchors[id][1];
+    const box: Box = { l: Infinity, t: Infinity, r: -Infinity, b: -Infinity };
+    for (const sx of [-1, 1])
+      for (const sz of [-1, 1])
+        for (const y of [0, top]) {
+          tmp.set(z.x + (sx * z.w) / 2, y, z.z + (sz * z.d) / 2).project(scratch);
+          const x = (tmp.x * 0.5 + 0.5) * w;
+          const yy = (-tmp.y * 0.5 + 0.5) * h;
+          box.l = Math.min(box.l, x);
+          box.r = Math.max(box.r, x);
+          box.t = Math.min(box.t, yy);
+          box.b = Math.max(box.b, yy);
+        }
+    scratch.clearViewOffset();
+    const side = popupSide(id);
+    const clampX = (x: number) => Math.max(POP_EDGE, Math.min(w - pw - POP_EDGE, x));
+    const clampY = (y: number) => Math.max(POP_EDGE, Math.min(h - ph - POP_EDGE, y));
+    const x = clampX(side === 'right' ? box.r + POP_GAP : box.l - POP_GAP - pw);
+    let y = clampY((box.t + box.b) / 2 - ph / 2);
+    // Step below any overlaid control it would cover (e.g. the overview button).
+    for (const o of obs.current)
+      if (hit({ l: x, t: y, r: x + pw, b: y + ph }, { l: o.x - 8, t: o.y - 8, r: o.x + o.w + 8, b: o.y + o.h + 8 }))
+        y = clampY(o.y + o.h + 8);
+    return { x: Math.round(x), y: Math.round(y), side };
+  };
+  /** Publish the popup placement for a target pose (deduplicated); keep its rect for hotspots. */
+  const publish = (to: Pose | null) => {
+    const p = to ? placement(to, mode.current.selected) : null;
+    pop.current.rect = p ? { l: p.x, t: p.y, r: p.x + pop.current.w, b: p.y + pop.current.h } : null;
+    const key = JSON.stringify(p);
+    if (key === pop.current.last) return;
+    pop.current.last = key;
+    placeCb.current?.(p);
+  };
 
   const apply = () => {
     const p = pose.current;
@@ -231,11 +303,11 @@ function City({
       const [cx, , cz] = d.center;
       return { px: cx + DIR.x * dist, py: DIR.y * dist, pz: cz + DIR.z * dist, tx: cx, ty: 0, tz: cz, ox: 0, oy: 0 };
     }
-    // Focus: fit the selected zone plus a margin into the free area beside the overlays, then
-    // shift the view so the zone sits at the centre of that area.
+    // Focus: fit the selected zone plus a margin into the area left beside the popup's column
+    // (if a popup is floated), then shift the view so the zone sits at the centre of that area.
     const z = d.zones[id];
     const top = d.anchors[id][1];
-    const free = freeArea(w, h, obs.current);
+    const free = focusArea(w, h, id);
     const fw = Math.max(80, free.r - free.l);
     const fh = Math.max(80, free.b - free.t);
     const hx = z.w / 2 + ZONE_MARGIN;
@@ -291,9 +363,10 @@ function City({
     gsap.killTweensOf(pose.current);
     Object.assign(pose.current, target(mode.current.focused, mode.current.selected));
     apply();
+    publish({ ...pose.current });
     labelSize.current.dirty = true;
     invalidate();
-    // target/apply/placeScratch only read refs and stable values.
+    // target/apply/placeScratch/publish only read refs and stable values.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [camera, size, d, invalidate, tmp, scratch]);
 
@@ -315,6 +388,7 @@ function City({
       return;
     }
     const to = target(focused, selected);
+    publish(to);
     const p = pose.current;
     // Already there (first mount, re-selecting in the overview, an overlay change while in the
     // overview): no move, one frame.
@@ -335,7 +409,15 @@ function City({
     });
     invalidate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, focused, obsKey, d, invalidate]);
+  }, [selected, focused, popW, d, invalidate]);
+
+  // Popup height, visibility or overlaid controls changed: re-place the popup (the camera does
+  // not move) and re-run the hotspot layout once.
+  useEffect(() => {
+    if (fit.current.dist) publish(target(mode.current.focused, mode.current.selected));
+    invalidate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [popH, popupOpen, obsKey, invalidate]);
   useEffect(() => () => void gsap.killTweensOf(pose.current), []);
 
   // Overlay: hotspots (placed by priority, kept inside the slot and clear of the overlaid UI and
@@ -359,6 +441,8 @@ function City({
     const order: EcosystemNodeId[] = [sel, ...connects.filter((id) => id !== sel)];
     for (const n of ECOSYSTEM_NODES) if (!order.includes(n.id)) order.push(n.id);
     const taken: Box[] = obs.current.map((o) => ({ l: o.x - 4, t: o.y - 4, r: o.x + o.w + 4, b: o.y + o.h + 4 }));
+    const pr = pop.current.open ? pop.current.rect : null;
+    if (pr) taken.push({ l: pr.l - 6, t: pr.t - 6, r: pr.r + 6, b: pr.b + 6 });
     const shown = {} as Record<EcosystemNodeId, [number, number] | null>;
     for (const id of order) {
       const el = hotspots[id];

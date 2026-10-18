@@ -598,6 +598,82 @@ No new dependencies, canvases or loops were added; `frameloop="demand"` and the 
 - At 390 px, unselected hotspots show numbers only, and the overview city is small (stage at least 300 px tall). The full content is in the summary and the details below.
 - Playwright's own auto‑scroll (when it clicks an off‑screen pill) is a test artefact, not page behaviour. The no‑scroll test uses a dispatched click.
 
+## M4.2 status: contextual floating popup (implemented)
+
+The M4.1 summary card, anchored bottom‑left, is replaced by a MyBlue.ai‑style popup that floats *next to the selected operation*.
+
+### Behaviour
+- **Overview:** the whole city, no popup, only the small hint chip. "Return to overview" is a compact pill in the city's top‑left corner. It is shown whenever a module is in focus, and hotspots avoid it.
+- **Selecting** (pill, city hotspot or "Connected to") opens the popup beside the zone. It holds:
+  - the tag;
+  - the title;
+  - the ICCC note (ICCC only);
+  - the short description;
+  - two capabilities;
+  - **View details** (the M4.1 full details below the city);
+  - a close (×) button.
+- **Switching modules** keeps one popup on screen at every frame. It glides to the new position (0.4 s transform transition), with no stacking and no drifting.
+- **× or Escape** dismisses the popup but keeps the selection and the focused camera. Focus goes to the selected pill. The camera then eases to re‑centre the zone, because the popup's column is no longer reserved. Selecting a module again reopens the popup.
+- **Return to overview** restores the full city and dismisses the popup. Focus goes to the selected pill.
+- **Look:** translucent dark surface (`backdrop-filter` with a solid fallback), 1 px border and a soft shadow. A small amber accent sits on the edge facing the zone (mint for ICCC). It is about 312 px wide on desktop and 272 px on tablet (where the capabilities are hidden), and never scrolls.
+- **Motion:** about 200 ms opacity and translate on entry and exit; none under reduced motion.
+- **Phones (< 768 px):** no floating popup. The compact summary stays below the city in normal flow, and the overview pill remains on the city.
+- **Fallbacks:** without JS, on the poster tier, under reduced motion, or with the schematic fallback, the M4.1 in‑flow summary and details are used.
+
+### Placement strategy (simple, deterministic, no library)
+1. **Side.** Zones west of the island centre (Collection, Logistics, Resources, Grievances) put the popup on their **right**; eastern zones (Processing, Landfill, Weighbridge, ICCC) put it on their **left**. The popup therefore sits over the denser city, not off the island edge.
+2. **Camera.** While a popup is wanted, the focus framing reserves a column of the popup's *width* plus clearance on that side, and centres the zone (with its margin) in the rest of the slot.
+   - Only the width affects the camera, and it is stable per breakpoint.
+   - The camera is the same one‑tween system as before: view offset in the pose, `overwrite: true`, no‑op moves skipped.
+3. **Position.** The stage projects the selected zone's footprint with the camera's **target** pose and returns `{x, y, side}` through `onPopupPlace`:
+   - beside that footprint with a 24 px gap, vertically centred on it;
+   - clamped 16 px inside the slot;
+   - stepped below the overview pill if it would cover it.
+   Because it comes from the target pose, the placement is known as the move starts. Rapid selections resolve to the last selection's placement.
+4. **Measuring.** The popup's size comes from a hidden twin that renders the selected module with the popup's CSS. It is measured in the same commit as the selection, so the stage has the new size before the popup opens.
+   - It is recomputed only on selection, focus, popup size, overlay or viewport changes, never per frame.
+   - Hotspots avoid the popup rectangle only while the popup is open.
+
+### Measured (production build, Intel UHD, 1440×900, high tier)
+| Measured | M4.1 | M4.2 |
+|---|---|---|
+| Draw calls / triangles / textures / programs | 4 / 3,550 / 0 / 4 | unchanged |
+| Frames: mount → idle | 3 | 3 |
+| One selection | about 26 frames | about 27 frames, then 0 |
+| Closing the popup (camera re‑centres) | n/a | about 29 frames, then 0 |
+| Frame cost, `gl.finish()` ×60 | p95 0.5 ms | p95 0.1 ms |
+| JS heap in Scene 04 | 40.1 MB | 37.8 MB |
+| Stage chunk (gzip) | 6.2 KB + 0.8 KB CSS | 6.7 KB + 0.8 KB CSS |
+
+There are no new dependencies, canvases or loops, and the popup is plain HTML/CSS. The only additional runtime cost is the hidden twin (one small DOM subtree).
+
+### Tests
+**New: popup test.** It covers:
+- no popup in the overview;
+- opened by a city hotspot;
+- for Collection, Processing, Logistics, Weighbridge and ICCC: inside the city, beside the selected zone and near it, never covering the selected hotspot, and hotspots clear of it;
+- at most one popup on screen at any frame during a switch;
+- western and eastern zones use different sides and positions;
+- View details is wired;
+- × keeps the selection and the focused camera, and returns focus to the pill;
+- re‑selecting reopens the popup, and Escape closes it;
+- Return to overview dismisses it;
+- zero idle frames afterwards.
+
+**Also new:**
+- phones have no floating popup;
+- the layout test waits for the popup to settle.
+
+**Results:**
+- ecosystem 17 out of 17;
+- the city and interaction tests 2 out of 2 on repeat;
+- lifecycle, hero and site 19 out of 19.
+
+### Limitations
+- The popup's element changes when the module changes, because each module's tabpanel owns its summary (this keeps the WAI‑ARIA tabs pattern). It renders first at the previous placement and then glides, so visitors see one popup moving.
+- The side choice is per zone (west or east), not per viewport. Near‑central zones (ICCC, Weighbridge) always use the left side.
+- The hidden twin duplicates the selected summary's DOM, hidden from assistive technology and inert.
+
 ## 12. Risks and unresolved decisions
 
 **Risks**

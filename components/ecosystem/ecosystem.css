@@ -1,14 +1,19 @@
 /* Scene 04 — IWMS ecosystem (M4.1: centred header, module pills, one dominant city view with
    progressive disclosure — a small hint in the overview, a compact summary when a module is
-   selected, the full details below the city on request — then capability cards). Existing tokens
-   only. No backdrop-filter, no glows, no animations — short CSS transitions only, disabled under
-   reduced motion. 3D overlay styles (hotspots, labels, connections) live in stage.css. */
+   selected, the full details below the city on request — then capability cards; M4.2: the
+   summary floats as one contextual popup beside the selected zone, placed by the stage).
+   Existing tokens only. No glows; the popup is the only blurred surface (one small element, with a
+   solid fallback). Short transitions only, all disabled under reduced motion. 3D overlay styles
+   (hotspots, labels, connections) live in stage.css. */
 .eco {
   --signal: #a6dcc8;
   --signal-dim: rgba(166, 220, 200, 0.4);
   --line: rgba(232, 237, 245, 0.12);
   --card: #111a2b;
-  --float-bg: rgba(11, 17, 30, 0.94);
+  --float-bg: rgba(11, 17, 30, 0.95);
+  --popup-bg: rgba(10, 15, 28, 0.78);
+  /* Stage card border: the slot's top-left sits this far inside .eco__view (popup origin). */
+  --eco-card-border: 1px;
   /* Fixed site header height (site-header.css: 44px targets + 0.75rem padding) + a little air. */
   --eco-header: 76px;
   --eco-clear: calc(var(--eco-header) + 1rem);
@@ -187,12 +192,13 @@
 .eco__source:focus-visible,
 .eco__details-btn:focus-visible,
 .eco__close-btn:focus-visible,
-.eco__overview-btn:focus-visible {
+.eco__overview-btn:focus-visible,
+.eco__popup-close:focus-visible {
   outline: 2px solid var(--amber);
   outline-offset: 2px;
 }
 
-/* City view. --stage-h sizes the stage card and anchors the floating summary to its bottom. */
+/* City view. --stage-h sizes the stage card. */
 .eco__view {
   --stage-h: max(300px, 78vw);
   position: relative;
@@ -212,7 +218,7 @@
 .eco__stage-card {
   position: relative;
   height: var(--stage-h);
-  border: 1px solid rgba(232, 237, 245, 0.1);
+  border: var(--eco-card-border) solid rgba(232, 237, 245, 0.1);
   border-radius: 18px;
   background:
     radial-gradient(
@@ -294,6 +300,28 @@
 .eco__hint svg {
   flex: none;
   color: var(--amber);
+}
+
+/* Return to overview: a compact pill in the city's top-left corner while a module is focused
+   (also an obstacle for the stage). */
+.eco__stage-card .eco__overview-btn {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  z-index: 4;
+  min-height: 34px;
+  padding: 0 0.8rem 0 0.65rem;
+  border-color: rgba(232, 237, 245, 0.18);
+  background: rgba(10, 15, 28, 0.85);
+  color: var(--text-light);
+  font-size: 0.76rem;
+}
+.eco__stage-card .eco__overview-btn svg {
+  color: var(--amber);
+}
+.eco__stage-card .eco__overview-btn:hover {
+  border-color: rgba(232, 237, 245, 0.45);
+  background: rgba(10, 15, 28, 0.95);
 }
 
 /* Note line under the stage */
@@ -502,6 +530,7 @@
   margin-top: 0.9rem;
 }
 .eco__details-btn,
+.eco__twin-btn,
 .eco__overview-btn,
 .eco__close-btn {
   display: inline-flex;
@@ -522,7 +551,8 @@
     border-color 0.15s ease,
     background-color 0.15s ease;
 }
-.eco__details-btn {
+.eco__details-btn,
+.eco__twin-btn {
   border-color: rgba(255, 165, 38, 0.55);
   background: rgba(255, 165, 38, 0.08);
 }
@@ -655,34 +685,139 @@
     margin-top: 0.15rem;
   }
 
-  /* Focused over the live 3D stage: the compact summary floats on the city, bottom-left,
-     anchored to the stage card's bottom edge. Solid (no blur), never scrolls internally. */
-  .eco__view[data-float='true'] .eco__card:not([hidden]) .eco__summary {
+
+  /* M4.2 floating popup: the selected module's summary, placed by the stage beside the selected
+     zone. Origin = the slot's top-left; the stage's placement is applied as a translate. One
+     element: switching modules swaps its content and glides it to the new placement. Never
+     scrolls internally. The hidden twin (same classes) measures its size for the stage. */
+  .eco[data-enhanced='true'] :is(.eco__popup, .eco__popup-twin) {
     position: absolute;
-    left: 16px;
-    bottom: calc(100% - var(--stage-h) + 16px);
+    left: var(--eco-card-border);
+    top: var(--eco-card-border);
     z-index: 6;
     display: block;
     box-sizing: border-box;
-    width: min(21.5rem, calc(100% - 32px));
-    padding: 1rem 1.1rem 0.95rem;
-    border-color: rgba(232, 237, 245, 0.16);
+    width: 19.5rem;
+    max-width: calc(100% - 32px);
+    padding: 1rem 1.1rem 1rem;
+    border: 1px solid rgba(232, 237, 245, 0.14);
+    border-radius: 12px;
     background: var(--float-bg);
-    box-shadow: 0 14px 34px rgba(3, 6, 14, 0.45);
+    box-shadow:
+      0 18px 40px rgba(3, 6, 14, 0.5),
+      0 2px 6px rgba(3, 6, 14, 0.35);
+    overflow: hidden;
   }
-  .eco__view[data-float='true'] .eco__summary-aside .eco__highlights {
-    margin-top: 0.7rem;
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .eco[data-enhanced='true'] .eco__popup {
+      background: var(--popup-bg);
+      -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
+    }
   }
-  .eco__view[data-float='true'] .eco__card-title {
+  /* Small accent on the edge facing the selected zone (amber; signal for the ICCC). */
+  .eco__popup::before {
+    content: '';
+    position: absolute;
+    top: 1rem;
+    left: 0;
+    width: 2px;
+    height: 1.5rem;
+    border-radius: 0 2px 2px 0;
+    background: var(--amber);
+  }
+  .eco__popup[data-side='left']::before {
+    left: auto;
+    right: 0;
+    border-radius: 2px 0 0 2px;
+  }
+  .eco__card[data-kind='integration'] .eco__popup::before {
+    background: var(--signal);
+  }
+  :is(.eco__popup, .eco__popup-twin) .eco__card-tag {
+    padding-right: 2rem;
+  }
+  :is(.eco__popup, .eco__popup-twin) .eco__card-title {
     font-size: 1.04rem;
   }
-  .eco__view[data-float='true'] .eco__card-summary {
+  :is(.eco__popup, .eco__popup-twin) .eco__card-summary {
     font-size: 0.84rem;
   }
+  :is(.eco__popup, .eco__popup-twin) .eco__summary-aside .eco__highlights {
+    margin-top: 0.7rem;
+  }
+  :is(.eco__popup, .eco__popup-twin) .eco__summary-actions {
+    margin-top: 0.85rem;
+  }
+  :is(.eco__popup .eco__details-btn, .eco__popup-twin .eco__twin-btn) {
+    min-height: 32px;
+    padding: 0 0.75rem;
+    font-size: 0.76rem;
+  }
+  .eco__popup-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition:
+      color 0.15s ease,
+      border-color 0.15s ease;
+  }
+  .eco__popup-close:hover {
+    color: var(--text-light);
+    border-color: rgba(232, 237, 245, 0.3);
+  }
+  /* Entrance: short fade + lift (individual translate/scale compose with the placement). Exit:
+     the reverse, after which the summary returns to the flow below the city. Placement changes
+     glide only once the popup has been shown (data-move), never on entrance. */
+  .eco__popup[data-eco-popup='open'] {
+    animation: eco-popup-in 0.2s ease-out both;
+  }
+  .eco__popup[data-move='on'] {
+    transition:
+      transform 0.4s cubic-bezier(0.33, 0, 0.2, 1),
+      opacity 0.2s ease,
+      translate 0.2s ease,
+      scale 0.2s ease;
+  }
+  .eco__popup[data-eco-popup='closing'] {
+    opacity: 0;
+    translate: 0 6px;
+    scale: 0.98;
+    pointer-events: none;
+    transition:
+      opacity 0.2s ease,
+      translate 0.2s ease,
+      scale 0.2s ease;
+  }
+  .eco__popup-twin {
+    visibility: hidden;
+    pointer-events: none;
+  }
 }
-/* Mid widths: the floating summary stays short (highlights remain in the details). */
+@keyframes eco-popup-in {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+    scale: 0.98;
+  }
+}
+/* Tablet: a smaller popup; the highlights stay in the details. */
 @media (min-width: 768px) and (max-width: 1099px) {
-  .eco__view[data-float='true'] .eco__highlights {
+  .eco[data-enhanced='true'] :is(.eco__popup, .eco__popup-twin) {
+    width: 17rem;
+    padding: 0.9rem 1rem 0.9rem;
+  }
+  :is(.eco__popup, .eco__popup-twin) .eco__highlights {
     display: none;
   }
 }
@@ -825,6 +960,11 @@
     left: 12px;
     bottom: 12px;
     font-size: 0.7rem;
+  }
+  .eco__stage-card .eco__overview-btn {
+    left: 12px;
+    top: 12px;
+    min-height: 44px;
   }
   .eco[data-enhanced='true'] .eco__summary,
   .eco[data-enhanced='true'] .eco__details {

@@ -244,6 +244,8 @@ export const ecosystemStageContent = {
   closeLabel: 'Close',
   closeDetailsLabel: (name: string) => `Close details for ${name}`,
   highlightsLabel: 'Key highlights',
+  /** M4.2: dismisses the floating module popup (selection and camera are kept). */
+  closePopupLabel: (label: string) => `Close ${label} summary`,
 };
 
 export interface EcosystemPillar {

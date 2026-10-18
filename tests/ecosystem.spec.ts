@@ -283,8 +283,12 @@ test.describe('Scene 04 ecosystem (M2)', () => {
     });
     expect(below).toBe(true);
 
-    // Selected: a compact summary floats on the city (small, no nested scrolling).
+    // Selected (M4.2): the summary becomes a compact popup floating on the city (small, no
+    // nested scrolling).
     await page.locator('#eco-tab-processing').click();
+    await expect(page.locator('#eco-processing .eco__popup[data-eco-popup="open"]')).toBeVisible();
+    await expect.poll(async () => (await ecoCamera(page)).tweening, { timeout: 10_000 }).toBe(false);
+    await page.waitForTimeout(500); // popup move transition
     const f = await page.evaluate(() => {
       const stage = document.querySelector('#ecosystem .eco__stage-card')!.getBoundingClientRect();
       const el = document.querySelector<HTMLElement>('#eco-processing .eco__summary')!;
@@ -356,6 +360,9 @@ test.describe('Scene 04 ecosystem (M2)', () => {
     });
   });
 });
+
+const ecoCamera = (page: Page) =>
+  page.evaluate(() => (window as unknown as { __iwmsEco: { camera: () => { tweening: boolean } } }).__iwmsEco.camera());
 
 interface EcoPose {
   px: number;
@@ -682,6 +689,114 @@ test.describe('Scene 04 city interactions (M4)', () => {
     expect(errors).toEqual([]);
   });
 
+  test('contextual popup (M4.2): opens on selection beside the zone, one element, close / reopen / overview', async ({
+    page,
+  }) => {
+    const errors = watch(page);
+    await openCity(page);
+    const popup = page.locator('.eco__popup');
+    // Overview: no popup.
+    await expect(page.locator('.eco__popup[data-eco-popup="open"]')).toHaveCount(0);
+
+    const place = async (id: string) => {
+      await settle(page);
+      await page.waitForTimeout(500); // the popup's 0.4 s move transition
+      return page.evaluate((sel) => {
+        const slot = document.querySelector('#ecosystem .eco__slot')!.getBoundingClientRect();
+        const el = document.querySelector<HTMLElement>('.eco__popup[data-eco-popup="open"]')!;
+        const r = el.getBoundingClientRect();
+        const dot = document.querySelector(`.eco__hotspot[data-id="${sel}"] .eco__hotspot-dot`)!.getBoundingClientRect();
+        return {
+          x: r.left - slot.left,
+          y: r.top - slot.top,
+          side: el.dataset.side,
+          inside: r.left >= slot.left && r.right <= slot.right && r.top >= slot.top && r.bottom <= slot.bottom,
+          coversSelected: r.left < dot.right && r.right > dot.left && r.top < dot.bottom && r.bottom > dot.top,
+          // The popup sits on the side of the zone it says, next to it (not pinned to a corner).
+          beside: el.dataset.side === 'right' ? r.left >= dot.right : r.right <= dot.left,
+          near: Math.min(Math.abs(r.left - dot.right), Math.abs(dot.left - r.right)) < slot.width * 0.35,
+        };
+      }, id);
+    };
+
+    // A city hotspot opens it next to the selected operation.
+    await page.locator('.eco__hotspot[data-id="collection"]').click();
+    await expect(page.locator('#eco-tab-collection')).toHaveAttribute('aria-selected', 'true');
+    await expect(popup).toHaveAttribute('data-eco-popup', 'open');
+    await expect(popup).toContainText('Collection & Verification');
+    const a = await place('collection');
+    expect(a).toMatchObject({ inside: true, coversSelected: false, beside: true, near: true });
+    expect(await hotspotProblems(page)).toEqual([]);
+
+    // Another module updates and repositions the popup: never two on screen, at any frame.
+    for (const id of ['processing', 'logistics', 'weighbridge', 'iccc']) {
+      const most = page.evaluate(
+        () =>
+          new Promise<number>((resolve) => {
+            let max = 0;
+            let n = 0;
+            const tick = () => {
+              max = Math.max(max, document.querySelectorAll('.eco__popup').length);
+              if (++n < 45) requestAnimationFrame(tick);
+              else resolve(max);
+            };
+            requestAnimationFrame(tick);
+          }),
+      );
+      await page.locator(`#eco-tab-${id}`).click();
+      expect(await most, `${id}: one popup`).toBe(1);
+      const b = await place(id);
+      expect(b, id).toMatchObject({ inside: true, coversSelected: false, beside: true, near: true });
+      expect(await hotspotProblems(page), id).toEqual([]);
+    }
+    // Contextual, not pinned: western and eastern zones put it on different sides/positions.
+    const west = await (async () => {
+      await page.locator('#eco-tab-collection').click();
+      return place('collection');
+    })();
+    const east = await (async () => {
+      await page.locator('#eco-tab-processing').click();
+      return place('processing');
+    })();
+    expect(west.side).toBe('right');
+    expect(east.side).toBe('left');
+    expect(Math.abs(west.x - east.x)).toBeGreaterThan(100);
+
+    // Full brochure details stay reachable from the popup.
+    await expect(popup.locator('.eco__details-btn')).toHaveAttribute('aria-controls', 'eco-processing-details');
+
+    // × closes the popup, keeps the selection and the focused camera, focus → selected pill.
+    await popup.locator('.eco__popup-close').click();
+    await expect(page.locator('.eco__popup[data-eco-popup="open"]')).toHaveCount(0);
+    await expect(page.locator('#eco-tab-processing')).toBeFocused();
+    await expect(page.locator('#eco-tab-processing')).toHaveAttribute('aria-selected', 'true');
+    await settle(page);
+    expect((await ecoCam(page)).focused).toBe(true);
+    expect(await visiblePanels(page)).toEqual(['eco-processing']);
+
+    // Re-selecting reopens it; Escape inside it closes it.
+    await page.locator('#eco-tab-processing').click();
+    await expect(page.locator('.eco__popup[data-eco-popup="open"]')).toBeVisible();
+    await page.locator('.eco__popup .eco__details-btn').focus();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.eco__popup[data-eco-popup="open"]')).toHaveCount(0);
+    await expect(page.locator('#eco-tab-processing')).toBeFocused();
+
+    // Return to overview restores the full city and dismisses the popup.
+    await page.locator('#eco-tab-landfill').click();
+    await expect(page.locator('.eco__popup[data-eco-popup="open"]')).toBeVisible();
+    await page.locator('.eco__overview-btn').click();
+    await expect(page.locator('.eco__popup[data-eco-popup="open"]')).toHaveCount(0);
+    await settle(page);
+    expect((await ecoCam(page)).focused).toBe(false);
+
+    // Still no idle rendering and no new programs after all of it.
+    const f = (await eco(page))!.frames;
+    await page.waitForTimeout(1_500);
+    expect((await eco(page))!.frames).toBe(f);
+    expect(errors).toEqual([]);
+  });
+
   test.describe('portrait phone', () => {
     test.use({ viewport: { width: 390, height: 844 } });
     test('compact layout: city above the card, focus keeps the selected hotspot in view', async ({ page }) => {
@@ -710,6 +825,7 @@ test.describe('Scene 04 city interactions (M4)', () => {
       expect(m.selInside).toBe(true);
       expect(m.docW).toBe(m.vw);
       expect(await hotspotProblems(page)).toEqual([]);
+      await expect(page.locator('.eco__popup[data-eco-popup="open"]'), 'no floating popup on phones').toHaveCount(0);
       await expect(page.locator('.eco__overview-btn')).toBeVisible();
       expect(errors).toEqual([]);
     });
