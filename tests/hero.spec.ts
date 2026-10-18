@@ -125,15 +125,18 @@ test.describe('reduced motion', () => {
     await expectCopyVisible(page);
     await expectCityCopyVisible(page);
 
-    const { docHeight, viewport, sectionHeight } = await page.evaluate(() => ({
+    const { docHeight, viewport, sectionHeight, afterHero } = await page.evaluate(() => ({
       docHeight: document.documentElement.scrollHeight,
       viewport: window.innerHeight,
       sectionHeight: document
         .querySelector('section.hero')!
         .getBoundingClientRect().height,
+      // Scene 04 follows the hero; it is a normal-flow section, not part of any hero pin.
+      afterHero: document.querySelector('#ecosystem')?.getBoundingClientRect().height ?? 0,
     }));
     expect(Math.abs(sectionHeight - viewport)).toBeLessThanOrEqual(2);
-    expect(Math.abs(docHeight - viewport)).toBeLessThanOrEqual(2);
+    // No scroll pin: the document is exactly the one-viewport hero plus the sections after it.
+    expect(Math.abs(docHeight - (viewport + afterHero))).toBeLessThanOrEqual(2);
     expect(w.pageErrors).toEqual([]);
   });
 });

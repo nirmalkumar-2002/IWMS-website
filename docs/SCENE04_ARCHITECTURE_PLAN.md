@@ -301,6 +301,58 @@ Each milestone is a separate commit behind its own checkpoint branch.
 - The pause only takes effect once content exists after the hero (Scene 04). Today the hero is the final section, so in production it never fully leaves the viewport.
 - **Implication for the canvas decision.** With the pause, a separate Scene 04 canvas would never render at the same time as the hero (one active loop). But both WebGL contexts and their GPU memory would stay resident. M3 must measure GPU memory and context count on the Intel/medium reference before choosing a separate canvas over the shared‑canvas design (§5.2).
 
+## M2 status: HTML/CSS interface (implemented)
+
+**What exists now.** `<EcosystemSection/>` is mounted after the hero in `src/pages/Home.tsx`. There is no 3D yet.
+
+- **Content.** `content/ecosystem.ts` is a typed single source with these entries:
+  - the 7 official modules, verbatim and in brochure order;
+  - `ICCC Integration` as `kind: 'integration'`.
+  
+  Each entry has a summary, 2–4 capabilities paraphrased from the cited brochure page, one benefit line (PROPOSED), the brochure page (linked as `iwms-brochure.pdf#page=N`), its connections and a schematic map position. There are no statistics and no live or simulated events.
+- **Interface.**
+  - WAI‑ARIA tabs with automatic activation and roving tabindex. Arrow keys work on both axes; Home and End jump to the ends.
+  - One `tabpanel` is visible at a time. "Connected to" buttons select the related module and move focus to its tab.
+  - ICCC sits after an "Integration" divider and carries the note "not a separate IWMS module".
+  - Actions: Request a demo (`demoRequestLink()`, so mailto once a real email is configured, www.zigma.in until then) and Download brochure (PDF).
+- **Placeholder.** `EcosystemMap` is a static, CSS‑styled SVG schematic (`data-slot="ecosystem-3d"`, `aria-hidden`). It mirrors the selection through data attributes and marks the slot the M3 city replaces. It doubles as the future static fallback.
+- **Layout.**
+  - ≥ 1280 × 700 with JS: a 200vh section with a sticky 100vh stage in three columns (intro and rail · map · panel). The extra 100vh is reserved for M3.
+  - Smaller screens: normal flow. The chip rail scrolls horizontally, the map sits above the panel, and targets are ≥ 44px.
+  - A soft gradient blends the hero's final frame into the section, as a non‑interactive overlay.
+- **Progressive enhancement.**
+  - Server and no‑JS markup: all eight modules as readable articles, plus an in‑page link list.
+  - After hydration: tabs. Static and poster tier: same interface (no WebGL involved).
+  - Reduced motion: no pin and no CSS transitions or animations.
+
+**Measured cost** (production build vs `445048f`):
+- Main JS +3.4 KB gzip (231 → 242 KB raw).
+- CSS +1.5 KB gzip.
+- 0 images, fonts or canvases.
+- No new dependencies.
+- No render loop: selection is a React state change plus CSS. The hero's render loop pauses once the visitor is half a viewport into the section (M1).
+
+**Tests.**
+- `tests/ecosystem.spec.ts`:
+  - official names, order and integration kind;
+  - no figures in the copy;
+  - prerendered markup;
+  - no‑JS list;
+  - ARIA wiring, keyboard model and connections;
+  - working actions, including the brochure HTTP 200;
+  - exactly one canvas on the page;
+  - hero ↔ section navigation, with the hero loop pausing and resuming and its state unchanged;
+  - 200vh sticky layout on desktop;
+  - phone: no horizontal overflow, 44px targets;
+  - reduced motion;
+  - poster tier.
+- `hero.spec` reduced‑motion check: "no pin" now accounts for content after the hero. The document must equal the one‑viewport hero plus the following section.
+
+**Limitations.**
+- On wide screens the pinned second 100vh has no scroll‑driven content until M3.
+- Header "Explore platform" still targets the hero's household scene. Retargeting it to `#ecosystem` remains decision D6.
+- The schematic map is decorative. Selection is by tabs, links, or clicking map nodes with a mouse.
+
 ## 12. Risks and unresolved decisions
 
 **Risks**
