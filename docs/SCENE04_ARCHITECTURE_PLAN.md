@@ -448,6 +448,83 @@ The two‑canvas design (the approved "separate canvas if performance‑safe") i
 - Real mobile GPUs were not available. The 390×844 checks used this desktop GPU with a medium tier.
 - Label overlap at narrow widths (Resources / D2D Logistics / Grievances are close together) should be handled in M4 with the portrait camera key.
 
+## M4 status: premium layout and city interactions (implemented)
+
+### Layout (replaces the M3 pinned two‑column layout)
+- **Natural flow.** The provisional ~200vh pinned section is retired. Scene 04 is now a normal section after the hero; nothing is sticky. The 1780vh hero is unchanged.
+- **Order:**
+  1. a centred eyebrow, title and lead;
+  2. one row of horizontal pills (01–07, then an "Integration" divider and ICCC);
+  3. one large framed city view;
+  4. a one‑line note ("Illustrative city view…");
+  5. four compact capability cards (brochure pages 6, 8, 12, 18);
+  6. the two actions.
+- **Info card.** There is one contextual card (`.eco__card`, the WAI‑ARIA tabpanel).
+  - At ≥ 1100 px it overlays the right of the city view (22 rem). The city is framed in the remaining area with a camera view offset, so it never sits under the card.
+  - Below 1100 px the card sits under the city.
+- **Removed.** No permanent sidebar, no left tabs, no three‑column dashboard.
+- **Responsive sizes.**
+  - City view height: `clamp(420px, 62vh, 700px)` on desktop, `56vw` on tablet, `max(300px, 78vw)` on phones.
+  - The pills scroll horizontally below 768 px, and the selected pill is scrolled into view.
+- **No JS.** Without JavaScript every module is an in‑page‑linked list of cards, with the schematic in the slot.
+
+### City interactions
+- **Hotspots.** Eight HTML hotspot pills (a dot plus the number and label) are positioned from projected anchors inside the render callback, so they move only on frames that render.
+  - They are mouse and touch buttons, out of the tab order, inside an `aria-hidden` overlay. The pills remain the accessible control.
+  - On phones, unselected modules show their number only.
+  - Hotspots are hidden outside the visible area: under the overlaid card, or within 24 px of an edge.
+- **Selection sync.** A pill, a hotspot or a "Connected to" button all set the same state. The pill, card, hotspot, zone highlight and camera always agree.
+- **Zone highlight.** Every zone has a thin mint outline (one merged mesh). The selected zone gets an amber frame plus the existing translucent plate.
+- **Camera focus.** Selecting a module eases the camera to that zone: 0.95 s `power2.inOut`, same pitch and yaw, no orbit and no rotation. The focus distance is 0.48 × the overview distance, or 0.68 × on narrow aspects (< 1.4), so the neighbouring zones keep their context on phones.
+- **Rapid selection.** The move is a single GSAP tween with `overwrite: true`, so a new selection replaces any running move from the current pose and nothing fights. A tween whose target equals the current pose is skipped. That case covers the first mount, and fixed an early bug where the mount rendered about 30 frames of a "move" to the same pose.
+- **Return to overview.** A "Return to overview" button (keyboard reachable) eases back to the exact overview pose and returns focus to the selected pill.
+- **Connections.** Dashed arcs from the focused module to its `connects` targets are drawn only while a module is focused, and only between visible hotspots. They are an SVG overlay with no 3D lines.
+- **Resize.** A resize re‑solves the overview fit and snaps to the current pose (no animation).
+
+### Rendering budget (production build, Intel UHD, 1440×900, high tier)
+| Measured | M3 | M4 |
+|---|---|---|
+| Draw calls | 2 | **4** (city, outlines, plate, selected frame) |
+| Triangles | 3,190 | 3,550 |
+| Textures / post‑processing / shadows | 0 / none / none | 0 / none / none |
+| Shader programs | 2 | 4, unchanged by any interaction |
+| Geometry buffers | 0.31 MB | 0.36 MB (frames for every zone are built once) |
+| Frames when idle | 0 | **0** (2 frames from mount to ready, then none) |
+| Frames per selection | 1 | one camera move, about 29 frames over 0.95 s, then 0 |
+| Frame cost, CPU+GPU, `gl.finish()` ×60 | p95 ≤ 0.2 ms | median 0.4 ms, p95 1.8 ms (larger 1198×556 drawing buffer) |
+| JS heap in Scene 04 | 37–41 MB | 37.8 MB |
+| Stage chunk | 3.9 KB gzip | 5.3 KB JS + 0.7 KB CSS gzip |
+
+No new dependencies, canvases or render loops were added. The stage is still `frameloop="demand"`, and the hero is still `never` while Scene 04 is shown. Under reduced motion, on the poster tier and without JS, the 3D stage is never loaded.
+
+### Tests (tests/ecosystem.spec.ts)
+- **Updated for the M4 DOM:**
+  - `.eco__card` / `.eco__card-tag` / `.eco__card-note`;
+  - `.eco__tabs--static`;
+  - `.eco__hotspot` inside the `aria-hidden` `.eco__overlay`.
+- **New layout test:** centred header, one pill row, a city view over 70% of the viewport width and at least 420 px tall, the card overlaying it at under 40% of its width, four capability cards, and nothing sticky.
+- **New interaction test:**
+  - a hotspot click syncs the pill, card and camera;
+  - arcs appear only when focused and never exceed the module's connections;
+  - no visible hotspot overlaps the info card;
+  - Return to overview restores the overview pose to within 1e‑3 and focuses the pill;
+  - five rapid selections end exactly where a calm selection does;
+  - at most 4 draw calls, no new programs, and 0 idle frames after every interaction.
+- **New phone test (390×844):** the card sits under the city, the focused hotspot stays visible inside the view, and there is no horizontal overflow.
+- **No‑JS test:** also checks for no overflow and a non‑collapsed slot.
+- **Poster test:** also checks for four cards and no overview control.
+- **M3 frame‑count race: resolved.**
+  - The test now waits for the camera move to end (`camera().tweening === false`) and for the frame counter to settle before reading it.
+  - Frames are bounded by the time the camera was moving (at most 120 Hz plus 4).
+  - It then asserts strictly 0 frames for 1.5 s, both in Scene 04 and after returning to the hero (at most one late frame, then 0).
+  - The city and interaction tests passed 3 out of 3 repeated runs.
+  - No assertion was weakened to a timeout.
+
+### Known limitations
+- At 1440 a focused zone near the island edge (for example Weighbridge) has some connection targets off‑screen. Their arcs are omitted rather than drawn to a hidden hotspot; the card still lists every connection.
+- The pillar copy and the stage note are marked PROPOSED in `content/ecosystem.ts` pending content sign‑off.
+- Real mobile GPUs were still not available. The phone checks used the desktop GPU on the medium tier.
+
 ## 12. Risks and unresolved decisions
 
 **Risks**

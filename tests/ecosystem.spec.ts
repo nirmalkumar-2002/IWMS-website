@@ -5,9 +5,10 @@ import { siteConfig } from '../content/config';
 import { ECOSYSTEM_NODES } from '../content/ecosystem';
 
 /**
- * Scene 04 M2: the IWMS ecosystem interface after the hero (HTML/CSS only, no 3D yet).
- * Covers SSR/no-JS markup, the tab/keyboard model, content integrity, actions, no extra canvas,
- * responsive layout, reduced motion, the static poster tier, and hero ↔ section navigation.
+ * Scene 04: the IWMS ecosystem after the hero. M2 interface (SSR/no-JS markup, tab/keyboard model,
+ * content integrity, actions, responsive layout, reduced motion, poster tier, hero ↔ section),
+ * M3 lazy on-demand city, M4 layout (pills, one large city view, info card, capability cards) and
+ * city interactions (hotspots, camera focus / return, rapid selection, connections).
  */
 
 const OFFICIAL_MODULES = [
@@ -67,7 +68,7 @@ const scrollTo = (page: Page, y: number) =>
   );
 
 const visiblePanels = (page: Page) =>
-  page.$$eval('.eco__panel', (els) => els.filter((e) => !(e as HTMLElement).hidden).map((e) => e.id));
+  page.$$eval('.eco__card', (els) => els.filter((e) => !(e as HTMLElement).hidden).map((e) => e.id));
 
 test.describe('Scene 04 ecosystem (M2)', () => {
   test.describe.configure({ timeout: 120_000 });
@@ -109,10 +110,19 @@ test.describe('Scene 04 ecosystem (M2)', () => {
       const section = page.locator('#ecosystem');
       await expect(section).toHaveAttribute('data-enhanced', 'false');
       await expect(section.locator('[role="tablist"]')).toHaveCount(0);
-      await expect(section.locator('.eco__panel')).toHaveCount(8);
+      await expect(section.locator('.eco__card')).toHaveCount(8);
       for (const id of ECOSYSTEM_NODES.map((n) => n.id))
         await expect(section.locator(`#eco-${id}`)).toBeVisible();
-      await expect(section.locator('.eco__rail--static a')).toHaveCount(8);
+      await expect(section.locator('.eco__tabs--static a')).toHaveCount(8);
+      await expect(section.locator('.eco__pillar')).toHaveCount(4);
+      // No horizontal overflow and nothing collapsed to zero height without JS.
+      const m = await page.evaluate(() => ({
+        docW: document.documentElement.scrollWidth,
+        vw: innerWidth,
+        slotH: document.querySelector<HTMLElement>('#ecosystem .eco__slot')!.offsetHeight,
+      }));
+      expect(m.docW).toBe(m.vw);
+      expect(m.slotH).toBeGreaterThan(200);
       await expect(section.locator('a.eco__action--primary')).toHaveAttribute('href', /^(mailto:|https:\/\/www\.zigma\.in)/);
     });
   });
@@ -152,11 +162,11 @@ test.describe('Scene 04 ecosystem (M2)', () => {
     expect(await visiblePanels(page)).toEqual(['eco-iccc']);
 
     // ICCC is labelled as an integration, not a module; modules never carry that note.
-    await expect(page.locator('#eco-iccc .eco__panel-tag')).toContainText('Integration');
-    await expect(page.locator('#eco-iccc .eco__panel-note')).toBeVisible();
+    await expect(page.locator('#eco-iccc .eco__card-tag')).toContainText('Integration');
+    await expect(page.locator('#eco-iccc .eco__card-note')).toBeVisible();
     await page.locator('#eco-tab-weighbridge').click();
-    await expect(page.locator('#eco-weighbridge .eco__panel-note')).toHaveCount(0);
-    await expect(page.locator('#eco-weighbridge .eco__panel-tag')).toContainText('Module 04');
+    await expect(page.locator('#eco-weighbridge .eco__card-note')).toHaveCount(0);
+    await expect(page.locator('#eco-weighbridge .eco__card-tag')).toContainText('Module 04');
 
     // "Connected to" selects the target and moves focus to its tab.
     await page.locator('#eco-weighbridge .eco__link', { hasText: 'Processing' }).click();
@@ -214,15 +224,40 @@ test.describe('Scene 04 ecosystem (M2)', () => {
     expect(errors).toEqual([]);
   });
 
-  test('desktop layout: provisional ~200vh section with a pinned stage', async ({ page }) => {
+  test('desktop layout (M4): centred header, one pill row, dominant city view, four capability cards', async ({
+    page,
+  }) => {
     await openCinematic(page);
     const m = await page.evaluate(() => {
       const s = document.querySelector<HTMLElement>('#ecosystem')!;
-      const stage = s.querySelector<HTMLElement>('.eco__stage')!;
-      return { ratio: s.offsetHeight / innerHeight, pos: getComputedStyle(stage).position };
+      const r = (sel: string) => s.querySelector<HTMLElement>(sel)!.getBoundingClientRect();
+      const tabs = [...s.querySelectorAll<HTMLElement>('[role="tab"]')].map((t) => t.getBoundingClientRect());
+      const sec = s.getBoundingClientRect();
+      const head = r('.eco__head');
+      const stage = r('.eco__stage-card');
+      const card = r('.eco__card:not([hidden])');
+      return {
+        headCentre: Math.abs(head.left + head.width / 2 - (sec.left + sec.width / 2)),
+        titleAlign: getComputedStyle(s.querySelector('.eco__title')!).textAlign,
+        rows: new Set(tabs.map((t) => Math.round(t.top))).size,
+        stageW: stage.width / innerWidth,
+        stageH: stage.height,
+        cardInside: card.left >= stage.left && card.right <= stage.right + 1,
+        cardW: card.width / stage.width,
+        pillars: s.querySelectorAll('.eco__pillar').length,
+        sticky: [...s.querySelectorAll<HTMLElement>('*')].some((e) => getComputedStyle(e).position === 'sticky'),
+      };
     });
-    expect(Math.abs(m.ratio - 2)).toBeLessThanOrEqual(0.01);
-    expect(m.pos).toBe('sticky');
+    expect(m.headCentre).toBeLessThanOrEqual(2);
+    expect(m.titleAlign).toBe('center');
+    expect(m.rows, 'pills form one horizontal row').toBe(1);
+    expect(m.stageW).toBeGreaterThan(0.7);
+    expect(m.stageH).toBeGreaterThanOrEqual(420);
+    // The single info card overlays the city view and stays secondary to it.
+    expect(m.cardInside).toBe(true);
+    expect(m.cardW).toBeLessThan(0.4);
+    expect(m.pillars).toBe(4);
+    expect(m.sticky, 'natural flow, no pinned stage').toBe(false);
     // Hero length untouched.
     const heroRatio = await page.evaluate(
       () => document.querySelector<HTMLElement>('section.hero')!.offsetHeight / innerHeight,
@@ -246,14 +281,14 @@ test.describe('Scene 04 ecosystem (M2)', () => {
           railScrolls: rail.scrollWidth > rail.clientWidth,
           minChip: Math.min(...chips.map((c) => c.getBoundingClientRect().height)),
           minAction: Math.min(...actions.map((a) => a.getBoundingClientRect().height)),
-          stage: getComputedStyle(document.querySelector('#ecosystem .eco__stage')!).position,
+          stageH: document.querySelector<HTMLElement>('#ecosystem .eco__stage-card')!.offsetHeight,
         };
       });
       expect(m.docW).toBe(m.vw);
       expect(m.railScrolls).toBe(true);
       expect(m.minChip).toBeGreaterThanOrEqual(44);
       expect(m.minAction).toBeGreaterThanOrEqual(44);
-      expect(m.stage).toBe('static');
+      expect(m.stageH).toBeGreaterThanOrEqual(300);
     });
   });
 
@@ -269,20 +304,30 @@ test.describe('Scene 04 ecosystem (M2)', () => {
       const m = await page.evaluate(() => {
         const s = document.querySelector<HTMLElement>('#ecosystem')!;
         return {
-          stage: getComputedStyle(s.querySelector('.eco__stage')!).position,
           anim: getComputedStyle(s.querySelector('#eco-landfill')!).animationName,
-          ratio: s.offsetHeight / innerHeight,
+          slotH: s.querySelector<HTMLElement>('.eco__slot')!.offsetHeight,
         };
       });
-      expect(m.stage).toBe('static');
       expect(m.anim).toBe('none');
-      expect(m.ratio).toBeLessThan(2);
+      expect(m.slotH).toBeGreaterThan(200);
     });
   });
 });
 
+interface EcoPose {
+  px: number;
+  py: number;
+  pz: number;
+  tx: number;
+  ty: number;
+  tz: number;
+  focused: boolean;
+  selected: string;
+  tweening: boolean;
+}
 interface EcoDebug {
   frames: () => number;
+  camera: () => EcoPose;
   info: () => { calls: number; triangles: number; textures: number; programs: number; contextLost: boolean };
 }
 const eco = (page: Page) =>
@@ -290,6 +335,25 @@ const eco = (page: Page) =>
     const e = (window as unknown as { __iwmsEco?: EcoDebug }).__iwmsEco;
     return e ? { frames: e.frames(), ...e.info() } : null;
   });
+const ecoCam = (page: Page) =>
+  page.evaluate(() => (window as unknown as { __iwmsEco: EcoDebug }).__iwmsEco.camera());
+/** Wait until the camera move has finished and the on-demand frame counter has stopped. */
+async function settle(page: Page) {
+  await expect.poll(async () => (await ecoCam(page)).tweening, { timeout: 10_000 }).toBe(false);
+  let last = -1;
+  await expect
+    .poll(
+      async () => {
+        const now = (await eco(page))!.frames;
+        const same = now === last;
+        last = now;
+        return same;
+      },
+      { intervals: [300], timeout: 5_000 },
+    )
+    .toBe(true);
+  return last;
+}
 const heroLoop = (page: Page) =>
   page.evaluate(() => (window as unknown as { __iwmsHero: HeroDebug }).__iwmsHero.loop());
 const heroBottomY = (page: Page) =>
@@ -318,11 +382,12 @@ test.describe('Scene 04 3D city (M3)', () => {
       const heroBottom = await heroBottomY(page);
       await scrollTo(page, heroBottom + 40);
       await expect(page.locator('.eco__slot')).toHaveAttribute('data-stage', 'ready', { timeout: 30_000 });
-      expect(requests.filter((u) => /EcosystemStage/.test(u)).length).toBe(1);
+      // One stage script chunk (plus its small stylesheet since M4), fetched once.
+      expect(requests.filter((u) => /EcosystemStage-[\w-]+\.js$/.test(u)).length).toBe(1);
       expect(await page.locator('canvas').count()).toBe(2);
       await expect.poll(async () => (await heroLoop(page)).frameloop).toBe('never');
-      await expect(page.locator('.eco__label')).toHaveCount(8);
-      await expect(page.locator('.eco__labels')).toHaveAttribute('aria-hidden', 'true');
+      await expect(page.locator('.eco__hotspot')).toHaveCount(8);
+      await expect(page.locator('.eco__overlay')).toHaveAttribute('aria-hidden', 'true');
 
       // Budget (M3): ≤ 4 draw calls, ≤ 20k triangles, no textures; no frames while idle.
       const idle = (await eco(page))!;
@@ -333,30 +398,27 @@ test.describe('Scene 04 3D city (M3)', () => {
       expect((await eco(page))!.frames, 'no idle frames').toBe(idle.frames);
       const heroFrames = (await heroLoop(page)).frames;
 
-      // Selections: about one frame each, no shader compiles; the label follows the selection.
+      // Selections (M4): each starts one short camera move that renders only while it runs; no
+      // shader compiles; the hotspot follows the selection.
+      const t0 = Date.now();
       for (const [id, text] of [
         ['weighbridge', /WEIGHBRIDGE/i],
         ['landfill', /LANDFILL/i],
         ['iccc', /ICCC/i],
       ] as const) {
         await page.locator(`#eco-tab-${id}`).click();
-        await expect(page.locator('.eco__label[data-state="selected"]')).toHaveText(text);
+        await expect(page.locator('.eco__hotspot[data-state="selected"]')).toHaveText(text);
       }
-      // Let the frames those selections requested actually render before reading the counter.
-      let settled = (await eco(page))!.frames;
-      await expect
-        .poll(async () => {
-          const now = (await eco(page))!.frames;
-          const same = now === settled;
-          settled = now;
-          return same;
-        }, { intervals: [300], timeout: 5_000 })
-        .toBe(true);
+      // Wait for the move to finish and the frames it requested to render, then read the counter.
+      await settle(page);
+      const moving = Date.now() - t0;
       const after = (await eco(page))!;
-      // On-demand: changes requested within one animation frame coalesce, so a burst of three
-      // selections costs at least one and only a handful of frames (never a continuous loop).
+      // Frames are bounded by the time the camera was moving (≤ 120 Hz + a few settling frames),
+      // never a continuous loop; then strictly nothing (checked below and on return to the hero).
       expect(after.frames - idle.frames).toBeGreaterThanOrEqual(1);
-      expect(after.frames - idle.frames).toBeLessThanOrEqual(8);
+      expect(after.frames - idle.frames).toBeLessThanOrEqual(Math.ceil((moving / 1000) * 120) + 4);
+      await page.waitForTimeout(1_500);
+      expect((await eco(page))!.frames, 'no frames once the camera is still').toBe(after.frames);
       expect(after.programs).toBe(idle.programs);
       expect(after.contextLost).toBe(false);
       expect((await heroLoop(page)).frames, 'hero stays paused during Scene 04 use').toBe(heroFrames);
@@ -408,6 +470,135 @@ test.describe('Scene 04 3D city (M3)', () => {
   });
 });
 
+test.describe('Scene 04 city interactions (M4)', () => {
+  test.describe.configure({ timeout: 150_000 });
+
+  async function openCity(page: Page) {
+    await openCinematic(page, 'high');
+    await scrollTo(page, (await heroBottomY(page)) + 40);
+    await expect(page.locator('.eco__slot')).toHaveAttribute('data-stage', 'ready', { timeout: 30_000 });
+    // Bring the whole city view on screen so every hotspot can be clicked.
+    await page.locator('.eco__stage-card').evaluate((el) => el.scrollIntoView({ block: 'center' }));
+    await settle(page);
+  }
+  const drawnLinks = (page: Page) =>
+    page.$$eval('.eco__links path', (ps) => ps.filter((p) => (p.getAttribute('d') ?? '') !== '').length);
+  const near = (a: EcoPose, b: EcoPose) =>
+    Math.max(...(['px', 'py', 'pz', 'tx', 'ty', 'tz'] as const).map((k) => Math.abs(a[k] - b[k])));
+
+  test('hotspots select, camera focuses and returns, rapid selection never conflicts', async ({ page }) => {
+    const errors = watch(page);
+    await openCity(page);
+    const overview = await ecoCam(page);
+    expect(overview.focused).toBe(false);
+    const programs = (await eco(page))!.programs;
+    // Overview: no return control and no connection arcs until a module is chosen.
+    await expect(page.locator('.eco__overview-btn')).toHaveCount(0);
+    expect(await drawnLinks(page)).toBe(0);
+
+    // A city hotspot selects its module: pill, card and camera stay in sync.
+    await page.locator('.eco__hotspot[data-id="weighbridge"]').click();
+    await expect(page.locator('#eco-tab-weighbridge')).toHaveAttribute('aria-selected', 'true');
+    expect(await visiblePanels(page)).toEqual(['eco-weighbridge']);
+    await settle(page);
+    const focusedPose = await ecoCam(page);
+    expect(focusedPose.focused).toBe(true);
+    expect(focusedPose.selected).toBe('weighbridge');
+    expect(near(focusedPose, overview)).toBeGreaterThan(1);
+    await expect(page.locator('.eco__hotspot[data-state="selected"]')).toHaveAttribute('data-id', 'weighbridge');
+    // Connections appear for the selected module only (at most its own connections).
+    const connects = ECOSYSTEM_NODES.find((n) => n.id === 'weighbridge')!.connects.length;
+    const links = await drawnLinks(page);
+    expect(links).toBeGreaterThanOrEqual(1);
+    expect(links).toBeLessThanOrEqual(connects);
+    await expect(page.locator('.eco__hotspot[data-state="linked"]')).toHaveCount(connects);
+
+    // Hotspots never show under the overlaid info card.
+    const overlap = await page.evaluate(() => {
+      const card = document.querySelector('#ecosystem .eco__card:not([hidden])')!.getBoundingClientRect();
+      return [...document.querySelectorAll<HTMLElement>('.eco__hotspot')]
+        .filter((h) => getComputedStyle(h).visibility === 'visible')
+        .filter((h) => {
+          const r = h.getBoundingClientRect();
+          return r.right > card.left && r.left < card.right && r.bottom > card.top && r.top < card.bottom;
+        })
+        .map((h) => h.dataset.id);
+    });
+    expect(overlap).toEqual([]);
+
+    // Return to overview: keyboard reachable, restores the exact overview pose, focus goes back
+    // to the selected pill, arcs disappear.
+    const back = page.locator('.eco__overview-btn');
+    await expect(back).toBeVisible();
+    await back.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#eco-tab-weighbridge')).toBeFocused();
+    await expect(back).toHaveCount(0);
+    await settle(page);
+    const restored = await ecoCam(page);
+    expect(restored.focused).toBe(false);
+    expect(near(restored, overview)).toBeLessThanOrEqual(1e-3);
+    expect(await drawnLinks(page)).toBe(0);
+
+    // Rapid selection (no waiting between clicks): one move wins, ending exactly where a calm
+    // selection of the same module ends.
+    for (const id of ['landfill', 'iccc', 'grievance', 'logistics', 'processing'])
+      await page.locator(`#eco-tab-${id}`).click({ delay: 0 });
+    await settle(page);
+    const rapid = await ecoCam(page);
+    expect(rapid.selected).toBe('processing');
+    expect(rapid.tweening).toBe(false);
+    expect(await visiblePanels(page)).toEqual(['eco-processing']);
+    await page.locator('#eco-tab-landfill').click();
+    await settle(page);
+    await page.locator('#eco-tab-processing').click();
+    await settle(page);
+    expect(near(await ecoCam(page), rapid)).toBeLessThanOrEqual(1e-3);
+
+    // Budget holds through every interaction: ≤ 4 draw calls, no new shader programs, no idle frames.
+    const info = (await eco(page))!;
+    expect(info.calls).toBeLessThanOrEqual(4);
+    expect(info.programs).toBe(programs);
+    expect(info.contextLost).toBe(false);
+    const still = info.frames;
+    await page.waitForTimeout(1_500);
+    expect((await eco(page))!.frames).toBe(still);
+    expect(errors).toEqual([]);
+  });
+
+  test.describe('portrait phone', () => {
+    test.use({ viewport: { width: 390, height: 844 } });
+    test('compact layout: city above the card, focus keeps the selected hotspot in view', async ({ page }) => {
+      const errors = watch(page);
+      await openCinematic(page, 'medium');
+      await scrollTo(page, (await heroBottomY(page)) + 40);
+      await expect(page.locator('.eco__slot')).toHaveAttribute('data-stage', 'ready', { timeout: 30_000 });
+      await page.locator('.eco__stage-card').evaluate((el) => el.scrollIntoView({ block: 'start' }));
+      await page.locator('#eco-tab-landfill').click();
+      await settle(page);
+      const m = await page.evaluate(() => {
+        const stage = document.querySelector('#ecosystem .eco__stage-card')!.getBoundingClientRect();
+        const card = document.querySelector('#ecosystem .eco__card:not([hidden])')!.getBoundingClientRect();
+        const sel = document.querySelector<HTMLElement>('.eco__hotspot[data-state="selected"]')!;
+        const r = sel.getBoundingClientRect();
+        return {
+          below: card.top >= stage.bottom - 1,
+          selVisible: getComputedStyle(sel).visibility === 'visible',
+          selInside: r.left >= stage.left && r.right <= stage.right && r.top >= stage.top && r.bottom <= stage.bottom,
+          docW: document.documentElement.scrollWidth,
+          vw: innerWidth,
+        };
+      });
+      expect(m.below).toBe(true);
+      expect(m.selVisible).toBe(true);
+      expect(m.selInside).toBe(true);
+      expect(m.docW).toBe(m.vw);
+      await expect(page.locator('.eco__overview-btn')).toBeVisible();
+      expect(errors).toEqual([]);
+    });
+  });
+});
+
 test.describe('Scene 04 on the static poster tier @software', () => {
   test('interface works without WebGL', async ({ page }) => {
     const requests: string[] = [];
@@ -419,5 +610,7 @@ test.describe('Scene 04 on the static poster tier @software', () => {
     expect(await visiblePanels(page)).toEqual(['eco-grievance']);
     expect(await page.locator('canvas').count()).toBe(0);
     expect(requests.filter((u) => /EcosystemStage/.test(u))).toEqual([]);
+    await expect(page.locator('.eco__pillar')).toHaveCount(4);
+    await expect(page.locator('.eco__overview-btn')).toHaveCount(0);
   });
 });

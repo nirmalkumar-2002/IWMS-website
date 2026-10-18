@@ -21,6 +21,10 @@ export interface Zone {
 export interface Diorama {
   geometries: BufferGeometry[];
   highlight: BufferGeometry;
+  /** M4: thin unlit frames around every zone (one geometry, one draw call). */
+  outlines: BufferGeometry;
+  /** M4: the selected zone's frame (one per zone; only the selected one is visible). */
+  frames: Record<EcosystemNodeId, BufferGeometry>;
   zones: Record<EcosystemNodeId, Zone>;
   anchors: Record<EcosystemNodeId, [number, number, number]>;
   center: [number, number, number];
@@ -251,18 +255,40 @@ export function buildDiorama(): Diorama {
 
   const zones = {} as Record<EcosystemNodeId, Zone>;
   const anchors = {} as Record<EcosystemNodeId, [number, number, number]>;
+  const outline = new GeoBuilder();
+  const frames = {} as Record<EcosystemNodeId, BufferGeometry>;
   for (const [id, zn] of Object.entries(ZONES) as [EcosystemNodeId, Zone & { top: number }][]) {
     zones[id] = { x: zn.x, z: zn.z, w: zn.w, d: zn.d };
     anchors[id] = [zn.x, zn.top + 2, zn.z];
+    frame(outline, zn, 0.35, rgb('#7fae9d'));
+    const f = new GeoBuilder();
+    frame(f, zn, 0.6, rgb('#ffa526'));
+    frames[id] = f.build()!;
   }
   const highlight = new PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
   return {
     geometries: [g.build()!],
     highlight,
+    outlines: outline.build()!,
+    frames,
     zones,
     anchors,
     center: [0, 0, 0],
     radius: Math.hypot(HX, HZ),
     extent: [HX, HZ],
   };
+}
+
+/** Rectangular border of thin slabs around a zone footprint, just above the ground. */
+function frame(g: GeoBuilder, z: Zone, t: number, color: RGB) {
+  const x0 = z.x - z.w / 2;
+  const x1 = z.x + z.w / 2;
+  const z0 = z.z - z.d / 2;
+  const z1 = z.z + z.d / 2;
+  const y0 = 0.14;
+  const y1 = 0.32;
+  g.box(x0, y0, z0, x1, y1, z0 + t, color);
+  g.box(x0, y0, z1 - t, x1, y1, z1, color);
+  g.box(x0, y0, z0 + t, x0 + t, y1, z1 - t, color);
+  g.box(x1 - t, y0, z0 + t, x1, y1, z1 - t, color);
 }

@@ -227,3 +227,53 @@ export const ECOSYSTEM_NODES: EcosystemNode[] = [
 export const ECOSYSTEM_BY_ID = Object.fromEntries(
   ECOSYSTEM_NODES.map((n) => [n.id, n]),
 ) as Record<EcosystemNodeId, EcosystemNode>;
+
+/** M4 additions (PROPOSED copy — not yet approved). */
+export const ecosystemStageContent = {
+  /** PROPOSED */
+  stageNote: 'Illustrative city view. Module details are taken from the IWMS brochure.',
+  overviewLabel: 'Return to overview',
+  pillarsLabel: 'What IWMS adds to daily operations',
+};
+
+export interface EcosystemPillar {
+  id: string;
+  /** Line icon drawn by the section. */
+  icon: 'verify' | 'fleet' | 'weigh' | 'citizens';
+  title: string;
+  text: string;
+  /** Brochure page the claim is taken from. */
+  page: number;
+}
+
+/** PROPOSED copy; each line is verified against the cited brochure page. */
+export const ecosystemPillars: EcosystemPillar[] = [
+  {
+    id: 'verify',
+    icon: 'verify',
+    title: 'Verify every pickup',
+    text: 'QR-verified collection logged with GPS location, timestamp and waste image.',
+    page: 6,
+  },
+  {
+    id: 'fleet',
+    icon: 'fleet',
+    title: 'Track the fleet',
+    text: 'Live vehicle map with geo-fencing and alerts when a vehicle leaves its route.',
+    page: 8,
+  },
+  {
+    id: 'weigh',
+    icon: 'weigh',
+    title: 'Reconcile every load',
+    text: 'IoT weighbridges check each load against the vehicle’s gross weight.',
+    page: 12,
+  },
+  {
+    id: 'citizens',
+    icon: 'citizens',
+    title: 'Close the loop with citizens',
+    text: 'Citizens rate pickups and raise grievances, with an escalation matrix.',
+    page: 18,
+  },
+];
