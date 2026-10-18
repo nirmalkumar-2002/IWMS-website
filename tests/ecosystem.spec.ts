@@ -312,6 +312,50 @@ test.describe('Scene 04 ecosystem (M2)', () => {
     expect(Math.abs(heroRatio - 17.8)).toBeLessThanOrEqual(0.01);
   });
 
+  test.describe('short desktop window (1525×662)', () => {
+    test.use({ viewport: { width: 1525, height: 662 } });
+    test('fixed header: solid only past the hero, heading clear on arrival, city view proportioned', async ({
+      page,
+    }) => {
+      await openCinematic(page);
+      const header = page.locator('.site-header');
+      // Over the hero the header keeps its light gradient.
+      await expect(header).toHaveAttribute('data-solid', 'false');
+      const bottom = await page.evaluate(() => {
+        const el = document.querySelector<HTMLElement>('section.hero')!;
+        return el.offsetTop + el.offsetHeight;
+      });
+      // Arrival in Scene 04: heading, lead and pills all below the (now solid) header.
+      await scrollTo(page, bottom);
+      await expect(header).toHaveAttribute('data-solid', 'true');
+      const m = await page.evaluate(() => {
+        const hb = document.querySelector('.site-header')!.getBoundingClientRect().bottom;
+        const top = (sel: string) => document.querySelector(sel)!.getBoundingClientRect().top;
+        const stage = document.querySelector('#ecosystem .eco__stage-card')!.getBoundingClientRect();
+        return {
+          hb,
+          eyebrow: top('#ecosystem .eco__eyebrow'),
+          title: top('#ecosystem .eco__title'),
+          tabs: document.querySelector('#ecosystem [role="tablist"]')!.getBoundingClientRect().bottom,
+          aspect: stage.width / stage.height,
+          vh: innerHeight,
+        };
+      });
+      expect(m.eyebrow).toBeGreaterThanOrEqual(m.hb);
+      expect(m.title).toBeGreaterThanOrEqual(m.hb);
+      expect(m.tabs).toBeLessThanOrEqual(m.vh);
+      // The city view keeps close to the city's own proportions (no wide empty sides).
+      expect(m.aspect).toBeLessThanOrEqual(1.9);
+      // Content that scrolls beneath the header is covered by its solid backing.
+      await expect
+        .poll(async () => page.evaluate(() => getComputedStyle(document.querySelector('.site-header')!, '::before').opacity))
+        .toBe('1');
+      // Back into the hero (Scene 03): the gradient returns.
+      await scrollTo(page, bottom - 1100);
+      await expect(header).toHaveAttribute('data-solid', 'false');
+    });
+  });
+
   test.describe('portrait phone', () => {
     test.use({ viewport: { width: 390, height: 844 } });
     test('no horizontal overflow, scrolling chip rail, ≥44px targets', async ({ page }) => {

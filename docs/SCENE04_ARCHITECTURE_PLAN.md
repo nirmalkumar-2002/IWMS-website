@@ -713,6 +713,37 @@ The width share is bounded by the island's own footprint (about 1.7:1) inside a 
   - the city and interaction tests 2 out of 2 on repeat;
   - lifecycle, hero and site 19 out of 19.
 
+## Visual correction: header overlap and city‑view proportions (implemented)
+
+**Header overlap: root cause.** `.site-header` is fixed with a gradient that fades to fully transparent. That suited its role over the hero canvas. Past the hero, any content scrolled beneath it showed through, so the heading collided with the brand. On short windows (for example 1525×662, a 1080p laptop at 125%), the heading, pills and the 440 px minimum city view cannot all fit below the header, so seeing the whole city *requires* the heading to pass under it. Extra padding would only move the problem to another viewport height.
+
+**Header fix (`SiteHeader.tsx`, `site-header.css`).**
+- One IntersectionObserver on `section.hero`, with the header's height as a negative top margin, sets `data-solid` once the hero has fully left the area under the header.
+- A `::before` layer then fades to solid navy (0.94) with a hairline border. There is no blur, and no fade under reduced motion.
+- Scrolling back into the hero (Scene 03) removes the solid layer, so the hero's look is unchanged.
+- There is no scroll listener and no new work in the hero.
+- Without JS the header keeps its gradient, as before.
+
+**City‑view proportions (`ecosystem.css`).**
+- At ≥ 768 px the city view is capped at `--stage-h × 1.85` and centred, close to the composed city's own proportions of about 1.75:1. Wide or short windows no longer get a 2:1–2.9:1 view with empty sides.
+- The camera is unchanged (42° / −32°). Occupancy of the projected island bounding box is now:
+
+| Viewport | Before | After |
+|---|---|---|
+| 1440×900 | 67% × 90% | 74% × 90% |
+| 1525×662 | about 49% wide | 73% × 88% |
+| 1024×768 | 59% × 88% | 72% × 88% |
+
+**Popup and hotspots:** unchanged system, and still contextual inside the narrower view.
+
+**Tests:** a new short‑window test checks:
+- the header is not solid over the hero and is solid past it, with its backing visible;
+- the eyebrow and title sit below the header on arrival and the pills are in view;
+- the city view's aspect ratio is at most 1.9;
+- the gradient returns after scrolling back into Scene 03.
+
+Ecosystem 19 out of 19; lifecycle, hero and site 19 out of 19.
+
 ## 12. Risks and unresolved decisions
 
 **Risks**

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { headerContent as h } from '@/content/hero';
 import { demoRequestLink, siteConfig } from '@/content/config';
 import type { HeroLabel } from './bridge';
@@ -22,8 +23,23 @@ export interface SiteHeaderProps {
  */
 export default function SiteHeader({ onNavigate }: SiteHeaderProps) {
   const demo = demoRequestLink();
+  const ref = useRef<HTMLElement>(null);
+  // Over the hero the header stays a light gradient on the canvas. Once the hero has scrolled
+  // out from under it, page content passes beneath the fixed header, so it gets a solid backing
+  // (otherwise headings scroll "through" the brand). One observer; no scroll listener.
+  const [solid, setSolid] = useState(false);
+  useEffect(() => {
+    const hero = document.querySelector('section.hero');
+    const header = ref.current;
+    if (!hero || !header || !('IntersectionObserver' in window)) return;
+    const io = new IntersectionObserver(([e]) => setSolid(!e.isIntersecting), {
+      rootMargin: `-${Math.round(header.offsetHeight)}px 0px 0px 0px`,
+    });
+    io.observe(hero);
+    return () => io.disconnect();
+  }, []);
   return (
-    <header className="site-header">
+    <header ref={ref} className="site-header" data-solid={solid ? 'true' : 'false'}>
       <a className="site-header__brand" href="/" aria-label={h.homeLabel}>
         <img
           className="site-header__logo"
