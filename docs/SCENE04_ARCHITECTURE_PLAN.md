@@ -744,6 +744,38 @@ The width share is bounded by the island's own footprint (about 1.7:1) inside a 
 
 Ecosystem 19 out of 19; lifecycle, hero and site 19 out of 19.
 
+## Static city (implemented, replaces the 3D city)
+
+Scene 04 no longer uses WebGL. The city is a pre‑rendered isometric illustration with HTML/SVG interaction on top. The 3D scene is rendered once offline from `tools/city-render/` (not shipped), and visitors download one image.
+
+**Assets (`public/scene04/`).**
+
+| Composition | Variants | Fallback |
+|---|---|---|
+| Desktop, 16:9 | WebP at 1280×720 (153 KB), 1920×1080 (286 KB) and 2560×1440 (484 KB) | JPEG 1920 |
+| Phones, 1:1 | WebP at 720 (110 KB) and 1080 (211 KB) | JPEG 1080 |
+
+- `<picture>` with `sizes` matched to the content width means one request per viewport. Measured at DPR 1: 1440 and 1024 load the 1280 WebP (156 KB); 390 loads the 720 WebP (113 KB).
+- The image is lazy‑loaded and decoded asynchronously, with explicit dimensions. `aspect-ratio` reserves the box, so there is no layout shift.
+- AVIF is not produced, because no encoder is available without a new dev dependency.
+
+**Layout.**
+- The heading, pills, city, popup/details and capability cards share `.eco__inner` (1200 px plus the gutter).
+- The city is 100% of that width, at 16:9 on desktop and tablet and 1:1 on phones, with equal outer margins.
+- Scrolling is natural: no pinning and no viewport‑height sizing.
+
+**Interaction (`EcosystemCity.tsx`, `city.css`, `cityData.ts`, generated from `tools/static-city/city.json`).**
+- **Pins:** numbered, positioned at anchor percentages. They are mouse and touch shortcuts that are `aria-hidden` and use `tabIndex=-1`, so the pills stay the WAI‑ARIA tabs. Labels appear only for the selected zone, or on hover or pill focus.
+- **Highlight:** the selected footprint gets an SVG amber fill and outline, and the rest is dimmed by at most 10%, only while something is selected.
+- **Popup:** one contextual floating popup on the side of the zone with more space, clamped inside the city. It never covers the selected footprint or pin; other pins under it are hidden. Close and Escape keep the selection, and Return to overview clears it.
+- **Details:** expand below the city.
+- **Phones:** the summary sits below the image.
+- **Recalculation:** placement runs only on resize or selection. Nothing renders continuously, and there are no transitions under reduced motion.
+
+**Tiers.** The city shows on every tier: high, medium, poster, reduced motion and no JS (the image is in the server render). Without JS, the full module list is kept.
+
+**Removed.** The lazy WebGL stage, the second canvas, shader compilation, the schematic fallback, and the camera, frame and occupancy tests. The hero is unchanged, including its off‑screen pause.
+
 ## 12. Risks and unresolved decisions
 
 **Risks**

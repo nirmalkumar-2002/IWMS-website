@@ -1,10 +1,11 @@
-/* Scene 04 — IWMS ecosystem (M4.1: centred header, module pills, one dominant city view with
-   progressive disclosure — a small hint in the overview, a compact summary when a module is
-   selected, the full details below the city on request — then capability cards; M4.2: the
-   summary floats as one contextual popup beside the selected zone, placed by the stage).
-   Existing tokens only. No glows; the popup is the only blurred surface (one small element, with a
-   solid fallback). Short transitions only, all disabled under reduced motion. 3D overlay styles
-   (hotspots, labels, connections) live in stage.css. */
+/* Scene 04 — IWMS ecosystem: centred header, module pills, one static city view (pre-rendered
+   image) with progressive disclosure — a small hint in the overview, a compact summary when a
+   module is selected (one contextual popup floating beside the selected zone >=768px), the full
+   details below the city on request — then capability cards. One content width for every block:
+   the heading, pills, city, summary/details and cards all sit in .eco__inner (1200px max + the
+   gutter), and the city takes its full width. Existing tokens only. No glows; the popup is the
+   only blurred surface (one small element, with a solid fallback). Short transitions only, all
+   disabled under reduced motion. The city box, pins and zone highlight live in city.css. */
 .eco {
   --signal: #a6dcc8;
   --signal-dim: rgba(166, 220, 200, 0.4);
@@ -12,8 +13,6 @@
   --card: #111a2b;
   --float-bg: rgba(11, 17, 30, 0.95);
   --popup-bg: rgba(10, 15, 28, 0.78);
-  /* Stage card border: the slot's top-left sits this far inside .eco__view (popup origin). */
-  --eco-card-border: 1px;
   /* Fixed site header height (site-header.css: 44px targets + 0.75rem padding) + a little air. */
   --eco-header: 76px;
   --eco-clear: calc(var(--eco-header) + 1rem);
@@ -198,90 +197,15 @@
   outline-offset: 2px;
 }
 
-/* City view. --stage-h sizes the stage card. */
+/* City view: the full content width (the box itself is in city.css). */
 .eco__view {
-  --stage-h: max(300px, 78vw);
   position: relative;
   width: 100%;
   margin-top: 1.25rem;
 }
-@media (min-width: 768px) {
-  .eco__view {
-    --stage-h: clamp(380px, min(56vw, 100vh - 350px), 640px);
-    /* Keep the city view close to the city's own proportions (about 1.75:1): on wide or short
-       screens a full-width view only adds empty sides the camera cannot use without cropping. */
-    max-width: calc(var(--stage-h) * 1.85);
-    margin-inline: auto;
-  }
-}
-@media (min-width: 1100px) {
-  .eco__view {
-    --stage-h: clamp(440px, 100vh - 320px, 720px);
-  }
-}
-.eco__stage-card {
-  position: relative;
-  height: var(--stage-h);
-  border: var(--eco-card-border) solid rgba(232, 237, 245, 0.1);
-  border-radius: 18px;
-  background:
-    radial-gradient(
-      90% 70% at 50% 40%,
-      rgba(27, 38, 56, 0.85),
-      transparent 75%
-    ),
-    linear-gradient(160deg, #0f1828 0%, var(--night-950) 100%);
-  overflow: hidden;
-}
-/* Thin corner brackets (decorative). */
-.eco__stage-card::after {
-  --b: rgba(232, 237, 245, 0.32);
-  --l: 18px;
-  content: '';
-  position: absolute;
-  inset: 10px;
-  z-index: 3;
-  pointer-events: none;
-  background:
-    linear-gradient(var(--b), var(--b)) top left / var(--l) 1px,
-    linear-gradient(var(--b), var(--b)) top left / 1px var(--l),
-    linear-gradient(var(--b), var(--b)) top right / var(--l) 1px,
-    linear-gradient(var(--b), var(--b)) top right / 1px var(--l),
-    linear-gradient(var(--b), var(--b)) bottom left / var(--l) 1px,
-    linear-gradient(var(--b), var(--b)) bottom left / 1px var(--l),
-    linear-gradient(var(--b), var(--b)) bottom right / var(--l) 1px,
-    linear-gradient(var(--b), var(--b)) bottom right / 1px var(--l);
-  background-repeat: no-repeat;
-}
 
-/* 3D slot (M3): the schematic stays until the miniature city's first compiled frame, and
-   returns if WebGL is unavailable or the context is lost. */
-.eco__slot {
-  position: absolute;
-  inset: 0;
-}
-.eco__slot .eco__map {
-  position: absolute;
-  inset: 5% 3%;
-  width: auto;
-  transition: opacity 0.4s ease;
-}
-.eco__slot[data-stage='ready'] .eco__map {
-  opacity: 0;
-  pointer-events: none;
-}
-.eco__canvas {
-  position: absolute !important;
-  inset: 0;
-  opacity: 0;
-  transition: opacity 0.5s ease;
-}
-.eco__slot[data-stage='ready'] .eco__canvas {
-  opacity: 1;
-}
-
-/* Overview hint: a small chip in the city's bottom-left corner (reported to the stage as an
-   obstacle so no hotspot sits under it). */
+/* Overview hint: a small chip in the city's bottom-left corner (an overlay the pins and labels
+   keep clear of). */
 .eco__hint {
   position: absolute;
   left: 16px;
@@ -306,9 +230,9 @@
   color: var(--amber);
 }
 
-/* Return to overview: a compact pill in the city's top-left corner while a module is focused
-   (also an obstacle for the stage). */
-.eco__stage-card .eco__overview-btn {
+/* Return to overview: a compact pill in the city's top-left corner while a module is selected
+   (also an overlay the pins, labels and popup keep clear of). */
+.eco__city .eco__overview-btn {
   position: absolute;
   left: 16px;
   top: 16px;
@@ -320,15 +244,15 @@
   color: var(--text-light);
   font-size: 0.76rem;
 }
-.eco__stage-card .eco__overview-btn svg {
+.eco__city .eco__overview-btn svg {
   color: var(--amber);
 }
-.eco__stage-card .eco__overview-btn:hover {
+.eco__city .eco__overview-btn:hover {
   border-color: rgba(232, 237, 245, 0.45);
   background: rgba(10, 15, 28, 0.95);
 }
 
-/* Note line under the stage */
+/* Note line under the city */
 .eco__note {
   display: inline-flex;
   align-items: center;
@@ -342,92 +266,6 @@
 .eco__note svg {
   flex: none;
   color: var(--signal);
-}
-
-/* Schematic map (static fallback / pre-3D view) */
-.eco__map {
-  width: 100%;
-  aspect-ratio: 100 / 62;
-  max-height: 100%;
-}
-.eco__map svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-.eco__map-ground {
-  fill: rgba(232, 237, 245, 0.025);
-  stroke: rgba(232, 237, 245, 0.08);
-  stroke-width: 0.3;
-}
-.eco__map-road {
-  fill: none;
-  stroke: rgba(232, 237, 245, 0.07);
-  stroke-width: 2;
-  stroke-linecap: round;
-}
-.eco__map-link {
-  fill: none;
-  stroke: rgba(166, 220, 200, 0.14);
-  stroke-width: 0.3;
-  transition:
-    stroke 0.2s ease,
-    stroke-width 0.2s ease;
-}
-.eco__map-link[data-on='true'] {
-  stroke: var(--signal);
-  stroke-width: 0.55;
-}
-.eco__map-node {
-  cursor: pointer;
-}
-.eco[data-enhanced='false'] .eco__map-node {
-  cursor: default;
-}
-.eco__map-hit {
-  fill: transparent;
-}
-.eco__map-ring {
-  fill: var(--night-950);
-  stroke: rgba(232, 237, 245, 0.35);
-  stroke-width: 0.35;
-  transition:
-    stroke 0.2s ease,
-    fill 0.2s ease;
-}
-.eco__map-dot {
-  fill: rgba(232, 237, 245, 0.6);
-  transition: fill 0.2s ease;
-}
-.eco__map-label {
-  font-family: var(--font-sans), 'Segoe UI', system-ui, sans-serif;
-  font-size: 2.1px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-anchor: middle;
-  text-transform: uppercase;
-  fill: rgba(232, 237, 245, 0.55);
-  transition: fill 0.2s ease;
-}
-.eco__map-node[data-kind='integration'] .eco__map-ring {
-  stroke: var(--signal-dim);
-}
-.eco__map-node[data-state='linked'] .eco__map-ring {
-  stroke: var(--signal);
-}
-.eco__map-node[data-state='linked'] .eco__map-label {
-  fill: rgba(232, 237, 245, 0.8);
-}
-.eco__map-node[data-state='selected'] .eco__map-ring {
-  stroke: var(--amber);
-  fill: rgba(255, 165, 38, 0.18);
-}
-.eco__map-node[data-state='selected'] .eco__map-dot {
-  fill: var(--amber);
-}
-.eco__map-node[data-state='selected'] .eco__map-label {
-  fill: var(--text-light);
 }
 
 /* Module panels. Enhanced: one tabpanel at a time = a compact summary (in flow below the city,
@@ -469,7 +307,8 @@
   text-transform: uppercase;
   color: var(--amber);
 }
-.eco__card[data-kind='integration'] .eco__card-tag {
+.eco__card[data-kind='integration'] .eco__card-tag,
+.eco__popup[data-kind='integration'] .eco__card-tag {
   color: var(--signal);
 }
 .eco__card-place {
@@ -689,15 +528,14 @@
     margin-top: 0.15rem;
   }
 
-
-  /* M4.2 floating popup: the selected module's summary, placed by the stage beside the selected
-     zone. Origin = the slot's top-left; the stage's placement is applied as a translate. One
-     element: switching modules swaps its content and glides it to the new placement. Never
-     scrolls internally. The hidden twin (same classes) measures its size for the stage. */
+  /* Floating popup: the selected module's summary, placed by the city beside the selected zone.
+     Origin = the city box's top-left (the top-left of .eco__view); the placement is applied as a
+     translate. One element: switching modules swaps its content and glides it to the new
+     placement. Never scrolls internally. The hidden twin (same classes) measures its size. */
   .eco[data-enhanced='true'] :is(.eco__popup, .eco__popup-twin) {
     position: absolute;
-    left: var(--eco-card-border);
-    top: var(--eco-card-border);
+    left: 0;
+    top: 0;
     z-index: 6;
     display: block;
     box-sizing: border-box;
@@ -712,7 +550,9 @@
       0 2px 6px rgba(3, 6, 14, 0.35);
     overflow: hidden;
   }
-  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  @supports (
+    (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+  ) {
     .eco[data-enhanced='true'] .eco__popup {
       background: var(--popup-bg);
       -webkit-backdrop-filter: blur(10px);
@@ -735,7 +575,7 @@
     right: 0;
     border-radius: 2px 0 0 2px;
   }
-  .eco__card[data-kind='integration'] .eco__popup::before {
+  .eco__popup[data-kind='integration']::before {
     background: var(--signal);
   }
   :is(.eco__popup, .eco__popup-twin) .eco__card-tag {
@@ -957,15 +797,12 @@
   .eco__tabs-divider {
     margin: 0 0.15rem;
   }
-  .eco__map-label {
-    font-size: 2.8px;
-  }
   .eco__hint {
     left: 12px;
     bottom: 12px;
     font-size: 0.7rem;
   }
-  .eco__stage-card .eco__overview-btn {
+  .eco__city .eco__overview-btn {
     left: 12px;
     top: 12px;
     min-height: 44px;

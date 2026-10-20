@@ -246,6 +246,9 @@ export const ecosystemStageContent = {
   highlightsLabel: 'Key highlights',
   /** M4.2: dismisses the floating module popup (selection and camera are kept). */
   closePopupLabel: (label: string) => `Close ${label} summary`,
+  /** Static city (M5): alt text of the pre-rendered city image. */
+  cityAlt:
+    'Illustrated miniature city seen from above, with the places IWMS covers: households and bins, collection vehicles and their routes, a crew depot, a weighbridge at the transfer station, a processing plant, an engineered landfill, citizens, and the city command centre.',
 };
 
 export interface EcosystemPillar {
