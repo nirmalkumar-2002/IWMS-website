@@ -802,9 +802,12 @@
     bottom: 12px;
     font-size: 0.7rem;
   }
+  /* Phones: bottom-left, the one corner of the square composition free of pins (the overview
+     hint that also sits there is only shown when nothing is selected). */
   .eco__city .eco__overview-btn {
     left: 12px;
-    top: 12px;
+    top: auto;
+    bottom: 12px;
     min-height: 44px;
   }
   .eco[data-enhanced='true'] .eco__summary,

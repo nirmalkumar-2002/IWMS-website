@@ -658,6 +658,27 @@ test.describe('Scene 04 ecosystem', () => {
       await expect(
         page.locator('.eco__pin[data-id="landfill"] .eco__pin-label'),
       ).toBeVisible();
+      // The "Return to overview" chip never sits on a pin badge, whichever module is selected.
+      for (const id of ECOSYSTEM_NODES.map((n) => n.id)) {
+        await page.locator(`#eco-tab-${id}`).dispatchEvent('click');
+        const under = await page.evaluate(() => {
+          const chip = document
+            .querySelector('#ecosystem .eco__overview-btn')!
+            .getBoundingClientRect();
+          return [...document.querySelectorAll<HTMLElement>('.eco__pin')]
+            .filter((p) => {
+              const b = p.querySelector('.eco__pin-badge')!.getBoundingClientRect();
+              return (
+                b.left < chip.right &&
+                b.right > chip.left &&
+                b.top < chip.bottom &&
+                b.bottom > chip.top
+              );
+            })
+            .map((p) => p.dataset.id);
+        });
+        expect(under, id).toEqual([]);
+      }
       expect(errors).toEqual([]);
     });
   });
