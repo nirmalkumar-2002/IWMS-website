@@ -265,7 +265,10 @@ function OffscreenPause({ section }: { section: HTMLElement }) {
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => setFrameloop(entry.isIntersecting ? 'always' : 'never'),
-      { rootMargin: '0px' },
+      // −1px at the top: edge contact counts as intersecting, so with a 0 margin a hero whose
+      // bottom sits exactly at the viewport top (e.g. landing on Scene 04 via Explore platform)
+      // kept rendering while fully invisible. It resumes as soon as 1px of it is visible.
+      { rootMargin: '-1px 0px 0px 0px' },
     );
     observer.observe(section);
     return () => {
@@ -366,6 +369,7 @@ export default function Stage({
     // header action can never be lost or undone by that reset: the actions appear when it is live.
     bridgeCallback.current?.({
       goTo: (label, { immediate = true } = {}) => experience.goTo(label, immediate),
+      scrollTo: (y) => experience.scrollTo(y),
     });
     return () => {
       bridgeCallback.current?.(null);

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { headerContent as h } from '@/content/hero';
-import { demoRequestLink, siteConfig } from '@/content/config';
+import { demoRequestLink } from '@/content/config';
 import type { HeroLabel } from './bridge';
 import './site-header.css';
 
@@ -11,6 +11,12 @@ export interface SiteHeaderProps {
    * the first client render are identical.
    */
   onNavigate: ((label: HeroLabel) => void) | null;
+  /**
+   * Explore platform in the cinematic mode: jumps to the IWMS ecosystem (Scene 04) without
+   * scrubbing through the pinned hero. Null elsewhere: the link's own `#ecosystem` anchor works
+   * natively (no JS, still/static modes, before the experience is live).
+   */
+  onExplore: (() => void) | null;
 }
 
 /**
@@ -21,7 +27,7 @@ export interface SiteHeaderProps {
  * `/privacy` and the 404). Deferred until their destinations exist: Modules, Solutions,
  * Case studies, Contact. No placeholder anchors.
  */
-export default function SiteHeader({ onNavigate }: SiteHeaderProps) {
+export default function SiteHeader({ onNavigate, onExplore }: SiteHeaderProps) {
   const demo = demoRequestLink();
   const ref = useRef<HTMLElement>(null);
   // Over the hero the header stays a light gradient on the canvas. Once the hero has scrolled
@@ -66,33 +72,23 @@ export default function SiteHeader({ onNavigate }: SiteHeaderProps) {
             {h.skipIntro}
           </button>
         )}
-        {onNavigate ? (
-          <button
-            type="button"
-            className="site-header__action site-header__action--outline"
-            aria-label={h.explore}
-            onClick={() => onNavigate('collect:household')}
-          >
-            <span className="site-header__long">{h.explore}</span>
-            <span className="site-header__short" aria-hidden="true">
-              {h.exploreShort}
-            </span>
-          </button>
-        ) : (
-          // No timeline to scroll (no JS, still/static modes, or not yet live): the brochure is
-          // the real platform overview.
-          <a
-            className="site-header__action site-header__action--outline"
-            href={siteConfig.brochurePath}
-            type="application/pdf"
-            aria-label={h.exploreBrochureLabel}
-          >
-            <span className="site-header__long">{h.explore}</span>
-            <span className="site-header__short" aria-hidden="true">
-              {h.exploreShort}
-            </span>
-          </a>
-        )}
+        {/* A real in-page link in every mode (works without JS); the cinematic mode takes over
+            the click so the jump skips the pinned hero instead of scrubbing through it. */}
+        <a
+          className="site-header__action site-header__action--outline"
+          href={`#${h.exploreTarget}`}
+          aria-label={h.exploreLabel}
+          onClick={(event) => {
+            if (!onExplore) return;
+            event.preventDefault();
+            onExplore();
+          }}
+        >
+          <span className="site-header__long">{h.explore}</span>
+          <span className="site-header__short" aria-hidden="true">
+            {h.exploreShort}
+          </span>
+        </a>
         <a
           className="site-header__action site-header__action--primary"
           href={demo.href}

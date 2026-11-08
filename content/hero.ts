@@ -69,8 +69,9 @@ export const headerContent = {
   skipIntroLabel: 'Skip intro: go to the IWMS collection monitor',
   explore: 'Explore platform',
   exploreShort: 'Platform',
-  /** Before the scroll experience is live (and in still/static modes) Explore opens the brochure. */
-  exploreBrochureLabel: 'Explore platform: IWMS brochure (PDF)',
+  /** Explore platform goes to the IWMS ecosystem section (Scene 04), in every mode. */
+  exploreLabel: 'Explore platform: the IWMS modules',
+  exploreTarget: 'ecosystem',
   demo: 'Request demo',
   demoShort: 'Demo',
   /** Used while the contact email is unconfigured and the action falls back to the website. */

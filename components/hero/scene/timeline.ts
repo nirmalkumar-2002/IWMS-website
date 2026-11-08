@@ -318,6 +318,11 @@ export interface Experience {
    * Returns false for an unknown label.
    */
   goTo: (label: string, immediate?: boolean) => boolean;
+  /**
+   * Jumps (no scrubbing through the pinned hero) to an absolute page offset, e.g. a section
+   * after the hero. Settles the intro first, like `goTo`.
+   */
+  scrollTo: (y: number) => void;
 }
 
 /**
@@ -333,6 +338,7 @@ export function startExperience(
   let lenis: Lenis | null = null;
   const touch = window.matchMedia('(pointer: coarse)').matches;
   let goTo: Experience['goTo'] = () => false;
+  let settleIntro = () => {};
 
   ctx.add(() => {
     const intro = buildIntro(rig, copy);
@@ -348,12 +354,21 @@ export function startExperience(
       invalidateOnRefresh: true,
       onUpdate(self) {
         if (!intro.isActive()) return;
-        if (self.progress >= headlightAt - 0.01) intro.progress(1);
-        else if (self.progress > 0.002) intro.timeScale(5);
+        if (self.progress >= headlightAt - 0.01) {
+          intro.progress(1);
+          // A jump past `headlight` while the intro still runs (End key, scrollbar drag): the
+          // reveal was rendered before this callback, so completing the intro just re-showed the
+          // title over the later shot. Re-apply the reveal at its current time so it wins.
+          const t = reveal.time();
+          reveal.time(0).time(t);
+        } else if (self.progress > 0.002) intro.timeScale(5);
       },
     });
     intro.play(0);
 
+    settleIntro = () => {
+      if (intro.progress() < 1) intro.progress(1);
+    };
     goTo = (label, immediate = true) => {
       if (!(label in reveal.labels)) return false;
       // Settle the intro first: ScrollTrigger renders the reveal before onUpdate completes the
@@ -383,5 +398,10 @@ export function startExperience(
       ctx.revert();
     },
     goTo: (label, immediate) => goTo(label, immediate),
+    scrollTo: (y) => {
+      settleIntro();
+      if (lenis) lenis.scrollTo(y, { immediate: true, force: true });
+      else window.scrollTo({ top: y, behavior: 'instant' });
+    },
   };
 }

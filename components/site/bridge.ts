@@ -10,4 +10,6 @@ export interface HeroBridge {
    * through the scroll in between. Returns false if the label is unknown.
    */
   goTo: (label: HeroLabel, options?: { immediate?: boolean }) => boolean;
+  /** Jumps (no scrubbing through the pinned hero) to an absolute page offset, e.g. Scene 04. */
+  scrollTo: (y: number) => void;
 }

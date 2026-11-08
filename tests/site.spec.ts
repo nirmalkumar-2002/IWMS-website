@@ -102,33 +102,6 @@ test.describe('Phase 3.3 timeline guard (node)', () => {
   });
 });
 
-/** Own numeric fields only (GSAP tags tweened objects with a circular `_gsap`). */
-const numeric = (o: object) =>
-  Object.fromEntries(
-    Object.entries(o).filter(([k, v]) => !k.startsWith('_') && typeof v === 'number'),
-  ) as Record<string, number>;
-
-/**
- * Rig range the browser may show at a label, allowing ±2 px of scroll rounding (the page has
- * 16.8 viewports of scroll for 33.7 timeline units).
- */
-function rigRangeAt(label: string, viewport: number) {
-  const { rig, tl } = nodeReveal();
-  const slack = (2 / (viewport * 16.8)) * tl.duration();
-  const sample = (t: number) => {
-    tl.seek(Math.min(tl.duration(), Math.max(0, t)), false);
-    return numeric(rig);
-  };
-  const t = tl.labels[label];
-  const a = sample(t - slack);
-  const b = sample(t + slack);
-  const c = sample(t);
-  const range: Record<string, [number, number]> = {};
-  for (const k of Object.keys(c))
-    range[k] = [Math.min(a[k], b[k], c[k]), Math.max(a[k], b[k], c[k])];
-  return range;
-}
-
 interface HeroDebug {
   rig: Rig & Record<string, number>;
 }
@@ -189,7 +162,7 @@ async function openCinematic(page: Page, query = '?quality=high&debug&testcam') 
 
 const header = (page: Page) => page.locator('header.site-header');
 const skip = (page: Page) => header(page).getByRole('button', { name: headerContent.skipIntroLabel });
-const explore = (page: Page) => header(page).getByRole('button', { name: headerContent.explore });
+const explore = (page: Page) => header(page).getByRole('link', { name: headerContent.exploreLabel });
 const demo = (page: Page) => header(page).locator('a.site-header__action--primary');
 
 function expectDemoHref(href: string | null) {
@@ -215,10 +188,22 @@ test.describe('site header without JavaScript', () => {
     await expect(brand.locator('img.site-header__logo')).toBeVisible();
     await expect(brand).toContainText(headerContent.brand);
     await expect(h.getByRole('navigation', { name: headerContent.navLabel })).toHaveCount(1);
-    // No timeline without JS: Skip intro is absent, Explore is the brochure link.
+    // No timeline without JS: Skip intro is absent; Explore is a plain in-page link to Scene 04.
     await expect(h.getByRole('button')).toHaveCount(0);
-    const brochure = h.getByRole('link', { name: headerContent.exploreBrochureLabel });
-    await expect(brochure).toHaveAttribute('href', siteConfig.brochurePath);
+    await expect(explore(page)).toHaveAttribute('href', `#${headerContent.exploreTarget}`);
+    await explore(page).click();
+    await expect(page).toHaveURL(new RegExp(`#${headerContent.exploreTarget}$`));
+    // It lands on the section, its heading clear of the fixed header.
+    const land = await page.evaluate(
+      (id) => ({
+        header: document.querySelector('header.site-header')!.getBoundingClientRect().bottom,
+        eyebrow: document.querySelector(`#${id} .eco__eyebrow`)!.getBoundingClientRect().top,
+        top: document.getElementById(id)!.getBoundingClientRect().top,
+      }),
+      headerContent.exploreTarget,
+    );
+    expect(Math.abs(land.top)).toBeLessThanOrEqual(2);
+    expect(land.eyebrow).toBeGreaterThanOrEqual(land.header);
     expectDemoHref(await demo(page).getAttribute('href'));
     await expect(demo(page)).toBeVisible();
     // Header is fixed: it adds no page height.
@@ -243,20 +228,27 @@ test.describe('site header without JavaScript', () => {
     expect(html).toContain(`>${headerContent.brand}<`);
     expect(html).not.toContain('{{');
     expect(html).not.toContain('hero__proxy-note');
-    // The brochure the no-JS Explore link points at is shipped.
+    // The brochure linked from Scene 04 (module sources, Download brochure) is shipped.
     expect(existsSync(resolve(`dist${siteConfig.brochurePath}`))).toBe(true);
   });
 });
 
 test.describe('site header, static poster @software', () => {
-  test('poster tier keeps the brochure link and a valid Request demo', async ({ page }) => {
+  test('poster tier: Explore goes to Scene 04 natively; valid Request demo', async ({ page }) => {
     const w = watch(page);
     await page.goto('/');
     await expect(page.locator('section.hero')).toHaveClass(/\bhero--static\b/);
     await expect(header(page).getByRole('button')).toHaveCount(0);
-    await expect(
-      header(page).getByRole('link', { name: headerContent.exploreBrochureLabel }),
-    ).toHaveAttribute('href', siteConfig.brochurePath);
+    await expect(explore(page)).toHaveAttribute('href', `#${headerContent.exploreTarget}`);
+    await explore(page).click();
+    await expect
+      .poll(() =>
+        page.evaluate(
+          (id) => Math.abs(document.getElementById(id)!.getBoundingClientRect().top),
+          headerContent.exploreTarget,
+        ),
+      )
+      .toBeLessThanOrEqual(2);
     expectDemoHref(await demo(page).getAttribute('href'));
     await expect(page.locator('.hero__proxy-note')).toHaveCount(0);
     expect(w.pageErrors).toEqual([]);
@@ -286,7 +278,7 @@ test.describe('site header, cinematic', () => {
     const order = [
       headerContent.homeLabel,
       headerContent.skipIntroLabel,
-      headerContent.explore,
+      headerContent.exploreLabel,
     ].map((n) => names.indexOf(n));
     test.info().annotations.push({ type: 'tab order', description: names.join(' → ') });
     expect(order.every((i) => i >= 0), names.join(' → ')).toBe(true);
@@ -316,40 +308,111 @@ test.describe('site header, cinematic', () => {
     expect(w.pageErrors).toEqual([]);
   });
 
-  test('Explore platform (keyboard) lands on the collect:household state', async ({ page }) => {
+  test('Explore platform jumps to Scene 04 from anywhere, focuses its heading; the hero pauses and resumes intact', async ({
+    page,
+  }) => {
     const w = watch(page);
     await openCinematic(page);
+    const id = headerContent.exploreTarget;
+    const landing = () =>
+      page.evaluate((target) => {
+        const sec = document.getElementById(target)!;
+        const img = sec.querySelector<HTMLImageElement>('.eco__city img');
+        return {
+          top: sec.getBoundingClientRect().top,
+          header: document.querySelector('header.site-header')!.getBoundingClientRect().bottom,
+          eyebrow: sec.querySelector('.eco__eyebrow')!.getBoundingClientRect().top,
+          focus: document.activeElement?.id ?? '',
+          solid: document.querySelector('header.site-header')!.getAttribute('data-solid'),
+          img: !!img && img.complete && img.naturalWidth > 0,
+          canvas: sec.querySelectorAll('canvas').length,
+        };
+      }, id);
+    const loop = () =>
+      page.evaluate(
+        () =>
+          (window as unknown as { __iwmsHero: { loop: () => { frameloop: string } } }).__iwmsHero.loop()
+            .frameloop,
+      );
+    const check = async (from: string) => {
+      await expect
+        .poll(async () => Math.abs((await landing()).top), { message: from })
+        .toBeLessThanOrEqual(2);
+      const m = await landing();
+      expect(m.eyebrow, from).toBeGreaterThanOrEqual(m.header);
+      expect(m.focus, from).toBe('eco-title');
+      expect(m.canvas, from).toBe(0);
+      await expect.poll(async () => (await landing()).solid, { message: from }).toBe('true');
+      await expect.poll(loop, { message: `${from}: hero render loop paused` }).toBe('never');
+      await expect
+        .poll(async () => (await landing()).img, { message: `${from}: city image` })
+        .toBe(true);
+    };
+
+    // From the very top, mid-intro, by keyboard: an immediate jump (no scrub through the hero).
+    expect((await rig(page)).approach).toBeGreaterThan(0);
     await explore(page).focus();
+    const t0 = Date.now();
     await page.keyboard.press('Enter');
+    await check('top');
+    test.info().annotations.push({ type: 'explore ms', description: String(Date.now() - t0) });
+    // Handled in place: no hash is added to the URL.
+    expect(new URL(page.url()).hash).toBe('');
+
+    // Back into the hero's end hold: it resumes, and the intro title stays gone (no stale copy).
+    const heroEnd = await page.evaluate(() => {
+      const h = document.querySelector<HTMLElement>('section.hero')!;
+      return h.offsetTop + h.offsetHeight - window.innerHeight;
+    });
+    await page.evaluate((y) => window.scrollTo(0, y), heroEnd);
+    await expect.poll(loop).toBe('always');
     await settle(page);
-    const viewport = await page.evaluate(() => window.innerHeight);
-    const want = rigRangeAt('collect:household', viewport);
-    const got = await rig(page);
-    const detail = JSON.stringify({ got, want });
-    for (const k of ['driveSec', 'cityU', 'collectU', 'camU', 'focal', ...OVERLAY_KEYS]) {
-      const [lo, hi] = want[k];
-      expect(got[k], `${k}: ${detail}`).toBeGreaterThanOrEqual(lo - 1e-4);
-      expect(got[k], `${k}: ${detail}`).toBeLessThanOrEqual(hi + 1e-4);
-    }
-    // At the household beat: GPS arrival logged, QR not scanned, not completed.
-    // (gps is still finishing its 0.4-unit ramp here; the monitor logs arrival from 0.5.)
-    expect(got.gps, detail).toBeGreaterThanOrEqual(0.5);
-    await expect
-      .poll(() =>
-        page.$$eval('.hero__collect .hero__states li', (els) =>
-          els.map((li) => li.getAttribute('data-state')),
-        ),
-      )
-      .toEqual(['done', 'awaiting', 'pending']);
-    expect(got.scan, detail).toBe(0);
-    expect(got.done, detail).toBe(0);
-    // Intro completed by the jump.
-    expect(got.approach).toBe(0);
-    await expect
-      .poll(() => page.evaluate(() => document.activeElement?.className ?? ''))
-      .toContain('hero__monitor');
+    expect(
+      await page.$$eval('.hero__word, .hero__positioning, .hero__subtitle', (els) =>
+        els.map((el) => Number(getComputedStyle(el).opacity)),
+      ),
+    ).toEqual(Array(heroContent.title.split(' ').length + 2).fill(0));
+    expect((await rig(page)).done).toBe(1);
+
+    // From mid-hero, by mouse.
+    await page.evaluate((y) => window.scrollTo(0, y), Math.round(heroEnd * 0.4));
+    await settle(page);
+    await explore(page).click();
+    await check('mid-hero');
+
+    // From further down inside Scene 04, then a repeated click: the same landing offset.
+    await page.evaluate(() => window.scrollTo(0, window.scrollY + 700));
+    await explore(page).click();
+    await check('inside Scene 04');
+    await explore(page).click();
+    await check('repeat');
     expect(w.pageErrors).toEqual([]);
     expect(w.consoleErrors).toEqual([]);
+  });
+
+  test('a native jump past the intro (End key, scrollbar drag) never leaves the intro title on screen', async ({
+    page,
+  }) => {
+    const w = watch(page);
+    await openCinematic(page);
+    // Still mid-intro: the title is being revealed.
+    expect((await rig(page)).approach).toBeGreaterThan(0);
+    const heroEnd = await page.evaluate(() => {
+      const h = document.querySelector<HTMLElement>('section.hero')!;
+      return h.offsetTop + h.offsetHeight - window.innerHeight;
+    });
+    await page.evaluate((y) => window.scrollTo(0, y), heroEnd);
+    await settle(page);
+    await page.waitForTimeout(1_000);
+    expect(
+      await page.$$eval('.hero__word, .hero__positioning, .hero__subtitle', (els) =>
+        els.map((el) => Number(getComputedStyle(el).opacity)),
+      ),
+    ).toEqual(Array(heroContent.title.split(' ').length + 2).fill(0));
+    const got = await rig(page);
+    expect(got.approach).toBe(0);
+    expect(got.done).toBe(1);
+    expect(w.pageErrors).toEqual([]);
   });
 
   test('Skip intro jumps to the end immediately, completes the intro and focuses the monitor', async ({

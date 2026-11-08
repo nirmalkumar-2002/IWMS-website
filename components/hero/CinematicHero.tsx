@@ -9,7 +9,7 @@ import {
   useState,
 } from 'react';
 import type { ReactNode } from 'react';
-import { heroContent } from '@/content/hero';
+import { headerContent, heroContent } from '@/content/hero';
 import SiteHeader from '@/components/site/SiteHeader';
 import type { HeroBridge, HeroLabel } from '@/components/site/bridge';
 import { detectQuality, type Quality } from './quality';
@@ -89,11 +89,28 @@ export default function CinematicHero() {
     [bridge],
   );
 
+  /**
+   * Explore platform: jump straight to the IWMS ecosystem (Scene 04) — no scrubbing through the
+   * pinned hero, whose render loop then pauses off-screen — and move focus to its heading. The
+   * section's own top padding clears the fixed header. Repeat clicks land on the same offset.
+   */
+  const explore = useCallback(() => {
+    const target = document.getElementById(headerContent.exploreTarget);
+    if (!bridge || !target) return;
+    bridge.scrollTo(target.getBoundingClientRect().top + window.scrollY);
+    const heading = target.querySelector<HTMLElement>('h2');
+    if (heading) {
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+    }
+  }, [bridge]);
+
   const words = heroContent.title.split(' ');
   return (
     <>
       <SiteHeader
         onNavigate={mode === 'cinematic' && bridge ? navigate : null}
+        onExplore={mode === 'cinematic' && bridge ? explore : null}
       />
       <section
         ref={sectionRef}
