@@ -131,8 +131,12 @@ test.describe('reduced motion', () => {
       sectionHeight: document
         .querySelector('section.hero')!
         .getBoundingClientRect().height,
-      // Scene 04 follows the hero; it is a normal-flow section, not part of any hero pin.
-      afterHero: document.querySelector('#ecosystem')?.getBoundingClientRect().height ?? 0,
+      // The sections after the hero (Scene 04, IWMS in Action, …) are normal-flow sections, not
+      // part of any hero pin.
+      afterHero: [...document.querySelectorAll<HTMLElement>('main > section:not(.hero)')].reduce(
+        (sum, el) => sum + el.getBoundingClientRect().height,
+        0,
+      ),
     }));
     expect(Math.abs(sectionHeight - viewport)).toBeLessThanOrEqual(2);
     // No scroll pin: the document is exactly the one-viewport hero plus the sections after it.
