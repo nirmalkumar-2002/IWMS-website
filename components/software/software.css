@@ -5,7 +5,6 @@
 .sw {
   --signal: #a6dcc8;
   --line: rgba(232, 237, 245, 0.12);
-  --card: #111a2b;
   /* Fixed site header (same clearance as Scene 04). */
   --sw-header: 76px;
   --sw-clear: calc(var(--sw-header) + 1rem);
@@ -86,68 +85,43 @@
   text-align: center;
 }
 
-/* ---------- Tour layout: stage (browser frame) + tour panel ---------- */
+/* ---------- Tour layout: full-width stage, compact dock below ---------- */
 .sw-tour {
+  /* Height reserved below the frame for the dock (one row on desktop). */
+  --sw-dock: 6.5rem;
   align-self: stretch;
-  display: grid;
-  gap: 1.25rem;
-  margin-top: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1.75rem;
   scroll-margin-top: var(--sw-clear);
-}
-@media (min-width: 1100px) {
-  .sw-tour {
-    grid-template-columns: minmax(0, 1fr) 19rem;
-    align-items: start;
-  }
 }
 .sw-stage {
   min-width: 0;
 }
 
-/* Browser frame around the application */
-.sw-browser {
+/* Frame around the application: clean rounded edge, no title bar. */
+.sw-frame {
   margin: 0;
-  border-radius: 12px;
+  border-radius: 10px;
   overflow: hidden;
   background: #fff;
   box-shadow:
-    0 0 0 1px rgba(232, 237, 245, 0.1),
-    0 24px 60px -24px rgba(0, 0, 0, 0.65);
-}
-.sw-browser__bar {
-  display: flex;
-  align-items: center;
-  gap: 0.9rem;
-  height: 34px;
-  padding: 0 0.85rem;
-  background: #eef0f3;
-  border-bottom: 1px solid #dfe3e8;
-}
-.sw-browser__dots {
-  display: inline-flex;
-  gap: 6px;
-}
-.sw-browser__dots i {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #cfd4db;
-}
-.sw-browser__addr {
-  flex: 0 1 18rem;
-  margin: 0 auto;
-  padding: 0.18rem 0.8rem;
-  border-radius: 6px;
-  background: #fff;
-  color: #6b7280;
-  font: 500 0.72rem/1.4 var(--font-inter), system-ui, sans-serif;
-  text-align: center;
+    0 0 0 1px rgba(232, 237, 245, 0.14),
+    0 20px 50px -24px rgba(0, 0, 0, 0.6);
 }
 
-/* The application viewport: fixed proportions; the board scrolls inside it. */
+/* The application viewport: 16:10 at full width, capped so frame + dock fit under the fixed
+   header on short desktop viewports (the board scrolls inside a shorter frame). */
 .sw-app {
   position: relative;
+  /* Full frame width always; the height cap only shortens it (the board scrolls in-frame). */
+  width: 100%;
   aspect-ratio: 16 / 10;
+  max-height: max(
+    26rem,
+    calc(100svh - var(--sw-header) - var(--sw-dock) - 1rem)
+  );
   overflow: hidden;
   background: #f5f5f5;
   container-type: inline-size;
@@ -750,126 +724,94 @@
   color: #555;
 }
 
-/* ---------- Tour panel ---------- */
-.sw-panel {
+/* ---------- Dock: compact, secondary controls below the frame ---------- */
+.sw-dock {
   display: flex;
-  flex-direction: column;
-  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
   min-width: 0;
-  padding: 1.1rem;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--card);
+  padding: 0.6rem 0.25rem 0;
+  border-top: 1px solid var(--line);
+  color: var(--text-muted);
+  font-size: 0.8rem;
 }
+@media (min-width: 1024px) {
+  .sw-dock {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    flex-wrap: nowrap;
+  }
+}
+
+/* Tour switch: a small segmented control. */
 .sw-tours {
-  display: grid;
-  gap: 0.5rem;
+  display: inline-flex;
+  flex: none;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
 }
 .sw-tourbtn {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  padding: 0.7rem 0.85rem;
-  border: 1px solid var(--line);
-  border-radius: 9px;
+  min-height: 32px;
+  padding: 0 0.9rem;
+  border: 0;
+  border-radius: 999px;
   background: transparent;
-  color: var(--text-light);
+  color: var(--text-muted);
   font: inherit;
-  text-align: left;
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
   cursor: pointer;
   transition:
-    border-color 0.2s ease,
+    color 0.2s ease,
     background 0.2s ease;
 }
 .sw-tourbtn:hover {
-  border-color: rgba(232, 237, 245, 0.3);
+  color: var(--text-light);
 }
 .sw-tourbtn[aria-pressed='true'] {
-  border-color: rgba(60, 184, 120, 0.7);
-  background: rgba(60, 184, 120, 0.08);
+  background: rgba(60, 184, 120, 0.16);
+  color: #3cb878;
+  box-shadow: inset 0 0 0 1px rgba(60, 184, 120, 0.55);
 }
-.sw-tourbtn__label {
-  font-size: 0.92rem;
+
+/* Current step: title + short caption. */
+.sw-now {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+.sw-now__title {
+  margin: 0;
+  color: var(--text-light);
+  font-size: 0.84rem;
   font-weight: 600;
+  line-height: 1.35;
 }
-.sw-tourbtn__summary {
-  color: var(--text-muted);
+.sw-now__caption {
+  margin: 0.1rem 0 0;
   font-size: 0.78rem;
   line-height: 1.45;
+  text-wrap: pretty;
 }
-.sw-steps {
-  display: grid;
-  gap: 0.15rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.sw-step {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  width: 100%;
-  min-height: 36px;
-  padding: 0.35rem 0.4rem;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--text-muted);
-  font: inherit;
-  font-size: 0.85rem;
-  text-align: left;
-  cursor: pointer;
-}
-.sw-step:hover {
-  color: var(--text-light);
-}
-.sw-step[aria-current='step'] {
-  color: var(--text-light);
-  background: rgba(232, 237, 245, 0.06);
-}
-.sw-step__n {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: 1px solid rgba(232, 237, 245, 0.25);
-  font-size: 0.72rem;
-  font-variant-numeric: tabular-nums;
-}
-.sw-step[aria-current='step'] .sw-step__n {
-  border-color: #3cb878;
-  background: #3cb878;
-  color: #fff;
-}
-.sw-step__title {
-  font-weight: 500;
-}
-.sw-step__caption {
-  margin: 0.2rem 0 0.4rem 2.35rem;
-  color: var(--text-muted);
-  font-size: 0.82rem;
-  line-height: 1.5;
-}
+
 .sw-controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
-  padding-top: 0.85rem;
-  border-top: 1px solid var(--line);
+  gap: 0.4rem;
 }
 .sw-controls__nav {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  margin-left: auto;
+  gap: 0.25rem;
 }
 .sw-controls__count {
   min-width: 5.5em;
   color: var(--text-muted);
-  font-size: 0.76rem;
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
   text-align: center;
 }
 .sw-ctl {
@@ -877,21 +819,22 @@
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  min-height: 36px;
-  padding: 0 0.85rem;
+  min-height: 32px;
+  padding: 0 0.75rem;
   border: 1px solid rgba(232, 237, 245, 0.2);
   border-radius: 999px;
   background: transparent;
   color: var(--text-light);
   font: inherit;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 500;
+  white-space: nowrap;
   cursor: pointer;
 }
-.sw-ctl:hover:not(:disabled) {
+.sw-ctl:hover:not(:disabled):not([aria-disabled='true']) {
   border-color: rgba(232, 237, 245, 0.45);
 }
-.sw-ctl:disabled {
+.sw-ctl:is(:disabled, [aria-disabled='true']) {
   opacity: 0.4;
   cursor: default;
 }
@@ -900,11 +843,10 @@
   color: var(--amber);
 }
 .sw-ctl--icon {
-  width: 36px;
+  width: 32px;
   padding: 0;
 }
 .sw-tourbtn:focus-visible,
-.sw-step:focus-visible,
 .sw-ctl:focus-visible {
   outline: 2px solid var(--amber);
   outline-offset: 2px;
@@ -920,9 +862,15 @@
 }
 
 /* No JS: every tour and step as text */
-.sw-static + .sw-static {
+.sw-dock--static {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  align-items: start;
+  gap: 1.25rem 2rem;
   padding-top: 1rem;
-  border-top: 1px solid var(--line);
+}
+.sw-static {
+  min-width: 0;
 }
 .sw-static__title {
   margin: 0;
@@ -956,6 +904,7 @@
   .sw-app {
     aspect-ratio: auto;
     min-height: 0;
+    max-height: none;
   }
   .iw--focus {
     position: relative;
@@ -994,11 +943,33 @@
   .iw-focus .iw-table {
     font-size: 12px;
   }
-  .sw-browser__addr {
-    flex-basis: 10rem;
+  /* Dock stacks: tours, current step, controls; each full width. */
+  .sw-dock {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.7rem;
   }
-  .sw-controls__nav {
-    margin-left: 0;
+  .sw-tours {
+    display: flex;
+  }
+  .sw-tourbtn {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 36px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .sw-now {
+    flex: none;
+  }
+  .sw-controls {
+    justify-content: space-between;
+  }
+  .sw-ctl {
+    min-height: 36px;
+  }
+  .sw-ctl--icon {
+    width: 36px;
   }
 }
 

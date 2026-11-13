@@ -67,7 +67,6 @@ export const softwareContent = {
   disclosureLong:
     'Recreated from the IWMS application’s Inward and Sorting dashboards. Facility and place names are placeholders, all values are masked and chart proportions are illustrative — no operational data is shown.',
   toursLabel: 'Dashboard tours',
-  stepsLabel: 'Steps',
   play: 'Play',
   pause: 'Pause',
   replay: 'Replay',
@@ -163,7 +162,7 @@ export const TOURS: readonly Tour[] = [
       {
         id: 'open',
         title: 'Open the Inward Dashboard',
-        caption: 'Inward analytics brings every load received at the facilities into one view.',
+        caption: 'Switch to the inward view of every load received at the facilities.',
         tab: 'inward',
         cursor: { target: 'tab-inward', action: 'click' },
         ring: 'tab-inward',
@@ -172,7 +171,7 @@ export const TOURS: readonly Tour[] = [
       {
         id: 'filter',
         title: 'Filter by date range',
-        caption: 'The filters panel narrows every chart on the dashboard to a chosen date range.',
+        caption: 'Set a date range to narrow every chart on the dashboard.',
         tab: 'inward',
         cursor: { target: 'date-range', action: 'click' },
         ring: 'date-range',
@@ -181,7 +180,7 @@ export const TOURS: readonly Tour[] = [
       {
         id: 'materials',
         title: 'Inward by material and source',
-        caption: 'Quantities received are broken down by material category and by the local body they came from.',
+        caption: 'See quantities received by material category and by source.',
         tab: 'inward',
         cursor: { target: 'inward-tables', action: 'point' },
         ring: 'inward-tables',
@@ -190,7 +189,7 @@ export const TOURS: readonly Tour[] = [
       {
         id: 'sources',
         title: 'Districts and source types',
-        caption: 'A district heatmap and a source-type breakdown show where inward waste originates.',
+        caption: 'Compare districts and source types to see where inward waste comes from.',
         tab: 'inward',
         scrollTo: 'inward-charts',
         cursor: { target: 'pie-lsg', action: 'hover' },
@@ -201,7 +200,7 @@ export const TOURS: readonly Tour[] = [
       {
         id: 'facilities',
         title: 'Quantity by facility',
-        caption: 'Each material recovery facility’s inward quantity is listed side by side.',
+        caption: 'Compare inward quantity across each material recovery facility.',
         tab: 'inward',
         scrollTo: 'inward-charts',
         cursor: { target: 'mrf-qty', action: 'point' },
@@ -219,7 +218,7 @@ export const TOURS: readonly Tour[] = [
       {
         id: 'open',
         title: 'Open the Sorting Dashboard',
-        caption: 'Sorting analytics reports what each facility feeds into sorting and what it recovers.',
+        caption: 'Switch to sorting to see what each facility feeds in and recovers.',
         tab: 'sorting',
         cursor: { target: 'tab-sorting', action: 'click' },
         ring: 'tab-sorting',
@@ -228,7 +227,7 @@ export const TOURS: readonly Tour[] = [
       {
         id: 'kpis',
         title: 'Feeding and recovery at a glance',
-        caption: 'Total feeding, total recovery and the recovery percentage head the dashboard.',
+        caption: 'Read total feeding, total recovery and recovery percentage at the top.',
         tab: 'sorting',
         cursor: { target: 'kpis', action: 'point' },
         ring: 'kpis',
@@ -237,7 +236,7 @@ export const TOURS: readonly Tour[] = [
       {
         id: 'summary',
         title: 'Sorting summary by belt and shift',
-        caption: 'Every sorting run is listed by date, facility, belt and shift, with input, output and efficiency.',
+        caption: 'Hover a sorting run to see its belt, shift, input, output and efficiency.',
         tab: 'sorting',
         scrollTo: 'sorting-summary',
         cursor: { target: 'summary-row', action: 'hover' },
@@ -247,7 +246,7 @@ export const TOURS: readonly Tour[] = [
       {
         id: 'output',
         title: 'Output materials and recovery',
-        caption: 'Recovered output is broken down by material, and recovery is compared across facilities.',
+        caption: 'Break recovered output down by material and compare recovery by facility.',
         tab: 'sorting',
         scrollTo: 'output',
         cursor: { target: 'treemap-tile', action: 'hover' },

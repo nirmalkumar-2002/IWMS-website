@@ -193,7 +193,7 @@ export default function SoftwareSection() {
     setStepIdx(s);
     setPhase(animate ? 'move' : 'act');
     const st = TOURS[t].steps[s];
-    setAnnounce(`${TOURS[t].label}: ${c.stepOf(s + 1, TOURS[t].steps.length)} — ${st.title}`);
+    setAnnounce(`${TOURS[t].label}: ${c.stepOf(s + 1, TOURS[t].steps.length)} — ${st.title}. ${st.caption}`);
   };
   const playTour = (t: number) => {
     setTourIdx(t);
@@ -201,7 +201,7 @@ export default function SoftwareSection() {
     setPhase('move');
     setScope('tour');
     setWant(!reduced);
-    setAnnounce(`${TOURS[t].label}: ${c.stepOf(1, TOURS[t].steps.length)} — ${TOURS[t].steps[0].title}`);
+    setAnnounce(`${TOURS[t].label}: ${c.stepOf(1, TOURS[t].steps.length)} — ${TOURS[t].steps[0].title}. ${TOURS[t].steps[0].caption}`);
   };
   const atEnd = stepIdx === total - 1 && phase === 'act' && !want;
   const togglePlay = () => {
@@ -256,15 +256,7 @@ export default function SoftwareSection() {
             onFocus={() => setHeld(true)}
             onBlur={() => setHeld(false)}
           >
-            <figure className="sw-browser" aria-describedby="software-disclosure">
-              <div className="sw-browser__bar" aria-hidden="true">
-                <span className="sw-browser__dots">
-                  <i />
-                  <i />
-                  <i />
-                </span>
-                <span className="sw-browser__addr">IWMS · Analytics</span>
-              </div>
+            <figure className="sw-frame" aria-describedby="software-disclosure">
               <div ref={appRef} className="sw-app" data-phase={phase} aria-label={c.frameLabel} role="img">
                 {narrow ? <FocusView target={step.focus} state={state} /> : <Dashboard state={state} />}
                 {enhanced && !narrow && overlay.ring && (
@@ -310,87 +302,66 @@ export default function SoftwareSection() {
             </figure>
           </div>
 
-          <div className="sw-panel">
-            {enhanced ? (
-              <>
-                <div className="sw-tours" role="group" aria-label={c.toursLabel}>
-                  {TOURS.map((t, i) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      className="sw-tourbtn"
-                      aria-pressed={i === tourIdx}
-                      onClick={() => playTour(i)}
-                    >
-                      <span className="sw-tourbtn__label">{t.label}</span>
-                      <span className="sw-tourbtn__summary">{t.summary}</span>
+          {enhanced ? (
+            <div className="sw-dock">
+              <div className="sw-tours" role="group" aria-label={c.toursLabel}>
+                {TOURS.map((t, i) => (
+                  <button key={t.id} type="button" className="sw-tourbtn" aria-pressed={i === tourIdx} onClick={() => playTour(i)}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              <div className="sw-now">
+                <p className="sw-now__title">{step.title}</p>
+                <p className="sw-now__caption">{step.caption}</p>
+              </div>
+              <div className="sw-controls">
+                {!reduced && (
+                  <>
+                    <button type="button" className="sw-ctl sw-ctl--primary" onClick={togglePlay} aria-pressed={want}>
+                      {want ? <PauseIcon /> : <PlayIcon />}
+                      {want ? c.pause : c.play}
                     </button>
-                  ))}
-                </div>
-                <ol className="sw-steps" aria-label={`${tour.label} — ${c.stepsLabel}`}>
-                  {tour.steps.map((s, i) => (
-                    <li key={s.id}>
-                      <button
-                        type="button"
-                        className="sw-step"
-                        aria-current={i === stepIdx ? 'step' : undefined}
-                        onClick={() => goTo(tourIdx, i, true)}
-                      >
-                        <span className="sw-step__n" aria-hidden="true">
-                          {i + 1}
-                        </span>
-                        <span className="sw-step__title">{s.title}</span>
-                      </button>
-                      {i === stepIdx && <p className="sw-step__caption">{s.caption}</p>}
-                    </li>
-                  ))}
-                </ol>
-                <div className="sw-controls">
-                  {!reduced && (
-                    <>
-                      <button type="button" className="sw-ctl sw-ctl--primary" onClick={togglePlay} aria-pressed={want}>
-                        {want ? <PauseIcon /> : <PlayIcon />}
-                        {want ? c.pause : c.play}
-                      </button>
-                      <button type="button" className="sw-ctl" onClick={replay}>
-                        <ReplayIcon />
-                        {c.replay}
-                      </button>
-                    </>
-                  )}
-                  <span className="sw-controls__nav">
-                    <button
-                      type="button"
-                      className="sw-ctl sw-ctl--icon"
-                      onClick={() => goTo(tourIdx, stepIdx - 1, !reduced)}
-                      disabled={stepIdx === 0}
-                      aria-label={c.back}
-                    >
-                      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M10 3.5 5.5 8l4.5 4.5" />
-                      </svg>
+                    <button type="button" className="sw-ctl" onClick={replay}>
+                      <ReplayIcon />
+                      {c.replay}
                     </button>
-                    <span className="sw-controls__count">{c.stepOf(stepIdx + 1, total)}</span>
-                    <button
-                      type="button"
-                      className="sw-ctl sw-ctl--icon"
-                      onClick={() => goTo(tourIdx, stepIdx + 1, !reduced)}
-                      disabled={stepIdx === total - 1}
-                      aria-label={c.next}
-                    >
-                      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M6 3.5 10.5 8 6 12.5" />
-                      </svg>
-                    </button>
-                  </span>
-                </div>
-                <p className="sw-sr" aria-live="polite">
-                  {announce}
-                </p>
-              </>
-            ) : (
-              // No JS: every tour and step as readable text.
-              TOURS.map((t) => (
+                  </>
+                )}
+                <span className="sw-controls__nav">
+                  <button
+                    type="button"
+                    className="sw-ctl sw-ctl--icon"
+                    onClick={() => stepIdx > 0 && goTo(tourIdx, stepIdx - 1, !reduced)}
+                    aria-disabled={stepIdx === 0}
+                    aria-label={c.back}
+                  >
+                    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M10 3.5 5.5 8l4.5 4.5" />
+                    </svg>
+                  </button>
+                  <span className="sw-controls__count">{c.stepOf(stepIdx + 1, total)}</span>
+                  <button
+                    type="button"
+                    className="sw-ctl sw-ctl--icon"
+                    onClick={() => stepIdx < total - 1 && goTo(tourIdx, stepIdx + 1, !reduced)}
+                    aria-disabled={stepIdx === total - 1}
+                    aria-label={c.next}
+                  >
+                    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M6 3.5 10.5 8 6 12.5" />
+                    </svg>
+                  </button>
+                </span>
+              </div>
+              <p className="sw-sr" aria-live="polite">
+                {announce}
+              </p>
+            </div>
+          ) : (
+            // No JS: every tour and step as readable text.
+            <div className="sw-dock sw-dock--static">
+              {TOURS.map((t) => (
                 <div key={t.id} className="sw-static">
                   <h3 className="sw-static__title">{t.label}</h3>
                   <p className="sw-static__summary">{t.summary}</p>
@@ -402,9 +373,9 @@ export default function SoftwareSection() {
                     ))}
                   </ol>
                 </div>
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <p id="software-disclosure" className="sw__note">
