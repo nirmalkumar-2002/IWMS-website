@@ -1,306 +1,260 @@
 /**
- * M6 — "IWMS in Action" content: four software demonstrations, each a 3-stage workflow.
+ * M6 — "IWMS in Action": a guided tour of the IWMS application's analytics dashboards, recreated
+ * in React/CSS from the approved reference recording of the real application (dashboard GIF).
  *
- * Every stage, caption and interface element paraphrases the cited page of iwms-brochure.pdf
- * (text in docs/source/deck-text.txt). The screens are ILLUSTRATIVE: no real application
- * screenshots exist in the project, so the interface shows structure and verified field
- * terminology only — no metrics, KPIs, timestamps, people, vehicle IDs, transactions or live data.
- * Where the brochure does not document how a step looks in the application, captions describe
- * the capability neutrally instead of inventing application behaviour.
+ * What is authentic: the dashboard structure, navigation (Overview · Inward · Dispatch · Sorting),
+ * panel titles, column names, chart types, material categories and the visual language.
+ * What is NOT shown: any operational data. Facility, local-body and district names are neutral
+ * placeholders; every value, date, count and percentage is masked; chart proportions are
+ * illustrative. Only the Inward and Sorting dashboards were seen in the reference, so only they
+ * are demonstrated; Overview and Dispatch appear as tabs only.
  *
  * Section heading/lead lines are PROPOSED marketing copy — not yet approved.
  */
-import type { EcosystemNodeId } from './ecosystem';
 
-export type SoftwareDemoId = 'fleet' | 'weighbridge' | 'grievance' | 'landfill';
+export type DashboardTab = 'overview' | 'inward' | 'dispatch' | 'sorting';
+export type TourId = 'inward' | 'sorting';
 
-/**
- * Named regions of each demonstration's screen. A callout points at one region; the visual
- * composition for that demonstration renders every region of its screen.
- */
-export type SoftwareRegion =
-  // Fleet & route monitoring (p.8)
-  | 'map'
-  | 'vehicles'
-  | 'geofence'
-  | 'route'
-  | 'alerts'
-  | 'verification'
-  | 'fuel'
-  | 'capacity'
-  // Weighbridge reconciliation (p.12)
-  | 'loadcells'
-  | 'transferStation'
-  | 'perStop'
-  | 'gross'
-  | 'comparison'
-  | 'discrepancy'
-  | 'auditTrail'
-  | 'calibration'
-  // Grievance lifecycle (p.18)
-  | 'citizenApp'
-  | 'complaintForm'
-  | 'queue'
-  | 'escalationMatrix'
-  | 'ratings'
-  | 'trends'
-  // Landfill & compliance (p.16)
-  | 'inflow'
-  | 'sources'
-  | 'utilisation'
-  | 'balanceLife'
-  | 'forecast'
-  | 'standards'
-  | 'report';
+/** Elements of the recreated dashboard a step can point at (`data-tour` attributes). */
+export type TourTarget =
+  | 'tab-inward'
+  | 'tab-sorting'
+  | 'date-range'
+  | 'inward-tables'
+  | 'inward-charts'
+  | 'pie-lsg'
+  | 'mrf-qty'
+  | 'kpis'
+  | 'sorting-summary'
+  | 'summary-row'
+  | 'output'
+  | 'treemap-tile'
+  | 'mrf-recovery';
 
-export interface SoftwareCallout {
-  region: SoftwareRegion;
-  /** Short interface-element name, as it would label that part of the screen. */
-  label: string;
-  /** One-line explanation, traceable to the demonstration's brochure page. */
-  text: string;
-}
-
-export interface SoftwareStage {
+export interface TourStep {
   id: string;
-  /** Workflow step name (shown in the 3-step indicator). */
   title: string;
-  /** What happens at this step, in one or two sentences. */
   caption: string;
-  /** Interface elements highlighted at this step (2–3). */
-  callouts: readonly SoftwareCallout[];
+  /** Dashboard tab shown once the step's action has happened. */
+  tab: DashboardTab;
+  /** Element scrolled into view inside the dashboard (none = top of the page). */
+  scrollTo?: TourTarget;
+  /** Where the cursor moves, and what it does there. */
+  cursor: { target: TourTarget; action: 'click' | 'hover' | 'point' };
+  /** Element ringed while the step is shown. */
+  ring: TourTarget;
+  /** Hover tooltip, in the application's style (values masked). */
+  tooltip?: { target: TourTarget; title: string; metric: string };
+  /** Panel shown on phones, where the whole dashboard would be too small to read. */
+  focus: TourTarget;
 }
 
-export interface SoftwareDemo {
-  id: SoftwareDemoId;
-  /** Selector label. */
+export interface Tour {
+  id: TourId;
   label: string;
-  /** Demonstration title (verbatim official module name in `module`). */
-  title: string;
-  /** The official IWMS module it belongs to (Scene 04 id). */
-  module: EcosystemNodeId;
-  /** One-line summary of the demonstration. */
   summary: string;
-  /** Brochure page with the source (opens iwms-brochure.pdf#page=N). */
-  page: number;
-  /** Navigation labels of the illustrative application (verified terminology only). */
-  nav: readonly string[];
-  stages: readonly [SoftwareStage, SoftwareStage, SoftwareStage];
+  /** The tab the tour starts from before its first click. */
+  startTab: DashboardTab;
+  steps: readonly TourStep[];
 }
 
 export const softwareContent = {
   eyebrow: 'IWMS software',
   title: 'IWMS in Action',
   /** PROPOSED */
-  lead: 'Every trip, weighment, complaint and landfill delivery becomes a record in IWMS — monitored, cross-checked, escalated and reported through its web and app-based monitoring tools.',
-  disclosure: 'Illustrative Interface — Based on IWMS Brochure',
-  /** Accessible explanation of the disclosure (screen readers, no-JS). */
+  lead: 'Every load received, sorted and recovered at a material recovery facility becomes data in IWMS — filtered, broken down by material, source and facility, and reported on one dashboard.',
+  disclosure: 'Illustrative Interface — Based on IWMS Software',
   disclosureLong:
-    'The screens in this section are illustrative compositions of documented IWMS capabilities. They contain no real data and are not production screenshots.',
-  selectorLabel: 'IWMS software demonstrations',
-  stepsLabel: 'Workflow',
-  stepLabel: (n: number) => `Step ${n}`,
-  sourceLabel: (page: number) => `Brochure, page ${page}`,
+    'Recreated from the IWMS application’s Inward and Sorting dashboards. Facility and place names are placeholders, all values are masked and chart proportions are illustrative — no operational data is shown.',
+  toursLabel: 'Dashboard tours',
+  stepsLabel: 'Steps',
+  play: 'Play',
+  pause: 'Pause',
+  replay: 'Replay',
   back: 'Back',
-  next: 'Next step',
-  appName: 'IWMS',
-  /** Placeholder shown where real values would appear (no fictional data). */
-  empty: 'Shown in the live application',
+  next: 'Next',
+  stepOf: (n: number, total: number) => `Step ${n} of ${total}`,
+  /** Accessible name of the recreated application frame. */
+  frameLabel: 'Recreated IWMS analytics dashboard (illustrative, values masked)',
+  maskedValue: 'value masked',
+  demo: 'Request a demo',
+  brochure: 'Download brochure (PDF)',
 } as const;
 
-export const SOFTWARE_DEMOS: readonly SoftwareDemo[] = [
+/** Labels of the recreated application, verbatim from the reference recording. */
+export const dashboardLabels = {
+  tabs: [
+    { id: 'overview', label: 'Overview' },
+    { id: 'inward', label: 'Inward Dashboard' },
+    { id: 'dispatch', label: 'Dispatch Dashboard' },
+    { id: 'sorting', label: 'Sorting Dashboard' },
+  ] as const satisfies readonly { id: DashboardTab; label: string }[],
+  filters: 'Filters',
+  dateRange: 'DATE RANGE',
+  noFilter: 'No filter',
+  inwardTitle: 'Facility Inward Analytics',
+  districtHeatmap: 'DISTRICT WISE HEATMAP',
+  sourceVsQty: 'SOURCE TYPE VS QTY',
+  mrfQty: 'MRF WISE QTY',
+  sortingTitle: 'SORTING ANALYTICS',
+  kpis: ['TOTAL FEEDING', 'TOTAL RECOVERY', 'RECOVERY (%)'],
+  sortingSummary: 'SORTING SUMMARY',
+  summaryColumns: [
+    'sortingDate',
+    'facilityName',
+    'beltName',
+    'shiftName',
+    'beltStaffCount',
+    'SUM(inputQuantity)',
+    'SUM(outputQuantity)',
+    'Efficiency',
+  ],
+  outputMaterials: 'OUTPUT MATERIALS',
+  mrfRecovery: 'MRF WISE RECOVERY',
+  materialBreakdown: 'Material Output Breakdown',
+  mrfOutput: 'MRF WISE OUTPUT',
+  metric: 'SUM(materialQuantity)',
+  facilityColumn: 'facilityName',
+  materialColumn: 'materialName',
+  metricLabel: 'Metric',
+  sourceTypes: ['LSG', 'OTHER', 'Unspecified'],
+  /** Material categories as recorded in IWMS (generic types, not records). */
+  inwardMaterials: [
+    'RECYCLE',
+    'FOOTWEAR WASTE',
+    'BSK',
+    'PET',
+    'CLOTH WASTE',
+    'PET BOTTLE MIX',
+    'SWEEPING REJECT',
+  ],
+  outputMaterialNames: [
+    'HM',
+    'BB',
+    'BSK',
+    'Raffia',
+    'Cloth',
+    'Pure MLP',
+    'Unshredded',
+    'CK',
+    'LD',
+    'PET BOTTLE',
+    'MLP',
+    'GLASS',
+    'CPP',
+    'Footwear',
+  ],
+  recoveryMaterials: ['ALUMINIUM', 'Aluminium Can', 'Astra (Non Woven)', 'BAJHAR', 'BB', 'BED'],
+  /** Placeholders for real identities (local bodies, districts, facilities). */
+  sources: ['Local body A', 'Local body B', 'Local body C', 'Local body D', 'Local body E', 'Local body F', 'Local body G'],
+  districts: ['District A', 'District B', 'District C', 'District D', 'District E', 'District F'],
+  facilities: ['MRF A', 'MRF B', 'MRF C', 'MRF D', 'MRF E'],
+  belts: ['Belt A', 'Belt B'],
+  shift: 'morning',
+} as const;
+
+export const TOURS: readonly Tour[] = [
   {
-    id: 'fleet',
-    label: 'Fleet & Route Monitoring',
-    title: 'D2D Collection & Logistics Management',
-    module: 'logistics',
-    summary: 'Every collection vehicle visible on one map, with routes, fuel and capacity under control.',
-    page: 8,
-    nav: ['Live tracking', 'Routes', 'Diesel', 'Capacity reports'],
-    stages: [
+    id: 'inward',
+    label: 'Inward Analytics',
+    summary: 'What arrives at each facility — by material, source, district and MRF.',
+    startTab: 'sorting',
+    steps: [
       {
-        id: 'tracking',
-        title: 'Live tracking',
-        caption:
-          'All collection vehicles appear on a live map, and geo-fences mark where each vehicle is allowed to operate.',
-        callouts: [
-          { region: 'map', label: 'Live vehicle map', text: 'Real-time visibility of all vehicles on a map.' },
-          { region: 'geofence', label: 'Geo-fence', text: 'Prevents unauthorised vehicle movement.' },
-          { region: 'vehicles', label: 'Fleet list', text: 'Each vehicle tracked by GPS.' },
-        ],
+        id: 'open',
+        title: 'Open the Inward Dashboard',
+        caption: 'Inward analytics brings every load received at the facilities into one view.',
+        tab: 'inward',
+        cursor: { target: 'tab-inward', action: 'click' },
+        ring: 'tab-inward',
+        focus: 'inward-tables',
       },
       {
-        id: 'adherence',
-        title: 'Route adherence',
-        caption:
-          'Routes are allocated and followed in IWMS; a deviation from the planned route raises an alert, and vehicle movement is verified.',
-        callouts: [
-          { region: 'route', label: 'Allocated route', text: 'Optimised route allocation for each vehicle.' },
-          { region: 'alerts', label: 'Deviation alerts', text: 'Adherence tracking with alerts for deviations.' },
-          {
-            region: 'verification',
-            label: 'Ring fencing',
-            text: 'Auto-detection of vehicle movement, with vehicle photo and CCTV verification.',
-          },
-        ],
+        id: 'filter',
+        title: 'Filter by date range',
+        caption: 'The filters panel narrows every chart on the dashboard to a chosen date range.',
+        tab: 'inward',
+        cursor: { target: 'date-range', action: 'click' },
+        ring: 'date-range',
+        focus: 'date-range',
       },
       {
-        id: 'reports',
-        title: 'Fuel & capacity reports',
-        caption:
-          'Diesel use and vehicle load are reported against efficiency and capacity, so misuse is prevented and the fleet is used well.',
-        callouts: [
-          { region: 'fuel', label: 'Diesel consumption', text: 'Tracks fuel usage and efficiency; prevents misuse.' },
-          { region: 'capacity', label: 'Capacity & utilisation', text: 'Monitors load against actual vehicle capacity.' },
-        ],
+        id: 'materials',
+        title: 'Inward by material and source',
+        caption: 'Quantities received are broken down by material category and by the local body they came from.',
+        tab: 'inward',
+        cursor: { target: 'inward-tables', action: 'point' },
+        ring: 'inward-tables',
+        focus: 'inward-tables',
+      },
+      {
+        id: 'sources',
+        title: 'Districts and source types',
+        caption: 'A district heatmap and a source-type breakdown show where inward waste originates.',
+        tab: 'inward',
+        scrollTo: 'inward-charts',
+        cursor: { target: 'pie-lsg', action: 'hover' },
+        ring: 'inward-charts',
+        tooltip: { target: 'pie-lsg', title: 'LSG', metric: 'SUM(materialQuantity)' },
+        focus: 'inward-charts',
+      },
+      {
+        id: 'facilities',
+        title: 'Quantity by facility',
+        caption: 'Each material recovery facility’s inward quantity is listed side by side.',
+        tab: 'inward',
+        scrollTo: 'inward-charts',
+        cursor: { target: 'mrf-qty', action: 'point' },
+        ring: 'mrf-qty',
+        focus: 'mrf-qty',
       },
     ],
   },
   {
-    id: 'weighbridge',
-    label: 'Weighbridge Reconciliation',
-    title: 'Weighbridge Management',
-    module: 'weighbridge',
-    summary: 'Collected waste is weighed, reconciled against every stop and kept in an audit trail.',
-    page: 12,
-    nav: ['Weighments', 'Cross-verification', 'Alerts', 'Calibration'],
-    stages: [
+    id: 'sorting',
+    label: 'Sorting & Recovery',
+    summary: 'How much is fed, sorted and recovered — per facility, belt and shift.',
+    startTab: 'inward',
+    steps: [
       {
-        id: 'capture',
-        title: 'Weighment capture',
-        caption:
-          'Transfer stations are connected to digital weighbridges, and IoT load cells log each vehicle’s waste weight as it is measured.',
-        callouts: [
-          { region: 'loadcells', label: 'IoT load cells', text: 'Real-time monitoring of vehicle waste weights.' },
-          {
-            region: 'transferStation',
-            label: 'Weighbridge integration',
-            text: 'Transfer stations connected with digital weighbridges.',
-          },
-        ],
+        id: 'open',
+        title: 'Open the Sorting Dashboard',
+        caption: 'Sorting analytics reports what each facility feeds into sorting and what it recovers.',
+        tab: 'sorting',
+        cursor: { target: 'tab-sorting', action: 'click' },
+        ring: 'tab-sorting',
+        focus: 'kpis',
       },
       {
-        id: 'cross-check',
-        title: 'Cross-verification',
-        caption:
-          'The waste recorded at each collection stop is compared with the vehicle’s gross weighment, keeping records consistent.',
-        callouts: [
-          { region: 'perStop', label: 'Per-stop collection', text: 'Waste recorded at each collection stop.' },
-          { region: 'gross', label: 'Gross weighment', text: 'The vehicle’s weight measured at the weighbridge.' },
-          { region: 'comparison', label: 'Cross-verification', text: 'Ensures consistency and prevents manipulation.' },
-        ],
+        id: 'kpis',
+        title: 'Feeding and recovery at a glance',
+        caption: 'Total feeding, total recovery and the recovery percentage head the dashboard.',
+        tab: 'sorting',
+        cursor: { target: 'kpis', action: 'point' },
+        ring: 'kpis',
+        focus: 'kpis',
       },
       {
-        id: 'audit',
-        title: 'Alerts & audit trail',
-        caption:
-          'A weight mismatch triggers an instant notification, every weighment stays in a complete digital audit trail, and calibration is kept on schedule.',
-        callouts: [
-          { region: 'discrepancy', label: 'Discrepancy alert', text: 'Instant notifications for mismatched weights.' },
-          { region: 'auditTrail', label: 'Audit log', text: 'Complete digital audit trail for accountability.' },
-          {
-            region: 'calibration',
-            label: 'Calibration',
-            text: 'Calibration schedule alerts and certificate renewal reminders.',
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'grievance',
-    label: 'Grievance Lifecycle',
-    title: 'Grievance Redressal Management',
-    module: 'grievance',
-    summary: 'Citizen complaints are raised, escalated until resolved and analysed for service quality.',
-    page: 18,
-    nav: ['Complaints', 'Escalation', 'Feedback', 'Insights'],
-    stages: [
-      {
-        id: 'raised',
-        title: 'Complaint raised',
-        caption:
-          'Citizens raise a complaint at any time through the IWMS citizen portal or mobile app — a transparent channel to the city.',
-        callouts: [
-          { region: 'citizenApp', label: 'Citizen portal & app', text: 'Easy access for citizens to raise complaints anytime.' },
-          { region: 'complaintForm', label: 'Complaint', text: 'A transparent communication channel.' },
-        ],
+        id: 'summary',
+        title: 'Sorting summary by belt and shift',
+        caption: 'Every sorting run is listed by date, facility, belt and shift, with input, output and efficiency.',
+        tab: 'sorting',
+        scrollTo: 'sorting-summary',
+        cursor: { target: 'summary-row', action: 'hover' },
+        ring: 'sorting-summary',
+        focus: 'sorting-summary',
       },
       {
-        id: 'escalation',
-        title: 'Escalation',
-        caption:
-          'Complaints that remain unresolved are routed automatically up the escalation matrix to higher authorities.',
-        callouts: [
-          { region: 'queue', label: 'Complaint queue', text: 'Complaints tracked until they are resolved.' },
-          {
-            region: 'escalationMatrix',
-            label: 'Escalation matrix',
-            text: 'Automatic routing of unresolved complaints to higher authorities.',
-          },
-        ],
-      },
-      {
-        id: 'insights',
-        title: 'Feedback & insights',
-        caption:
-          'Citizens rate each pickup from one to five stars, and analytics track complaint trends, response times and feedback patterns.',
-        callouts: [
-          { region: 'ratings', label: 'Pickup ratings', text: 'Ratings (1–5 stars) after each waste pickup.' },
-          {
-            region: 'trends',
-            label: 'Analytics-driven insights',
-            text: 'Complaint trends, response times and feedback patterns.',
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'landfill',
-    label: 'Landfill & Compliance',
-    title: 'Landfill Management',
-    module: 'landfill',
-    summary: 'Every delivery to the landfill is tracked, capacity is planned and compliance is reported.',
-    page: 16,
-    nav: ['Inflow', 'Capacity', 'Compliance', 'Reports'],
-    stages: [
-      {
-        id: 'inflow',
-        title: 'Inflow tracking',
-        caption:
-          'All waste reaching the landfill is monitored — including processing rejects and mixed or unsegregated waste — with weighbridge data integrated.',
-        callouts: [
-          { region: 'inflow', label: 'Waste inflow', text: 'Monitors all waste reaching the landfill; integrated with weighbridge data.' },
-          { region: 'sources', label: 'Inflow categories', text: 'Processing rejects and mixed/unsegregated waste.' },
-        ],
-      },
-      {
-        id: 'capacity',
-        title: 'Capacity & balance life',
-        caption:
-          'Dashboards show current utilisation, balance life and forecast scenarios, so new cells, expansion or diversion can be planned in time.',
-        callouts: [
-          { region: 'utilisation', label: 'Current utilisation', text: 'How much of the landfill’s safe capacity is used.' },
-          { region: 'balanceLife', label: 'Balance life', text: 'Updated with weighbridge, drone/GIS and 3D modelling data.' },
-          { region: 'forecast', label: 'Forecast scenarios', text: 'Planning for new cells, expansion or diversion.' },
-        ],
-      },
-      {
-        id: 'compliance',
-        title: 'Compliance reporting',
-        caption:
-          'Operations are checked against SWM Rules, environmental norms and safety standards, and structured reports are generated for authorities.',
-        callouts: [
-          { region: 'standards', label: 'Compliance', text: 'Adherence to SWM Rules, environmental norms and safety standards.' },
-          { region: 'report', label: 'Reports for authorities', text: 'Structured reports generated for authorities.' },
-        ],
+        id: 'output',
+        title: 'Output materials and recovery',
+        caption: 'Recovered output is broken down by material, and recovery is compared across facilities.',
+        tab: 'sorting',
+        scrollTo: 'output',
+        cursor: { target: 'treemap-tile', action: 'hover' },
+        ring: 'output',
+        tooltip: { target: 'treemap-tile', title: 'HM', metric: 'SUM(materialQuantity)' },
+        focus: 'output',
       },
     ],
   },
 ] as const;
-
-export const SOFTWARE_BY_ID = Object.fromEntries(SOFTWARE_DEMOS.map((d) => [d.id, d])) as Record<
-  SoftwareDemoId,
-  SoftwareDemo
->;

@@ -1,31 +1,52 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { test, expect, type Page } from '@playwright/test';
-import { SOFTWARE_DEMOS, softwareContent } from '../content/software';
+import { dashboardLabels, softwareContent, TOURS } from '../content/software';
 
 /**
- * M6.2 "IWMS in Action": static software demonstrations after Scene 04. SSR/no-JS markup, the
- * one interaction (WAI-ARIA tabs switching the demonstration), region/marker integrity, the
- * no-fictional-data rule, responsive overflow, header clearance and reduced motion.
+ * M6 "IWMS in Action": the guided tour of the recreated IWMS analytics dashboards.
+ * SSR/no-JS content, sanitisation (no operational values or identities), autoplay once,
+ * pausing (hover, off-screen, user control), controls, reduced motion and the phone focus view.
  * The light poster hero tier keeps these tests fast; the section is identical on every tier.
  */
 
-const amp = (s: string) => s.replace(/&/g, '&amp;');
+const amp = (s: string) => s.replace(/&/g, '&amp;').replace(/’/g, '’');
+
+/** Real identities visible in the reference recording; none may appear on the website. */
+const REAL_NAMES = [
+  'MANJERI',
+  'KASARGODE',
+  'THAMARASSERY',
+  'PERUMBAVOOR',
+  'KOMBARA',
+  'Andaman',
+  'MALAPPURAM',
+  'ERNAKULAM',
+  'PERUVAYAL',
+  'ALAPPUZHA',
+  'UNNIKULAM',
+  'KONDOTTY',
+  'OMASSERY',
+  'KIZHAKOTH',
+  'VERRA',
+  'PLANET PROTECTORS',
+];
 
 async function open(page: Page) {
   await page.goto('/?quality=poster');
-  await expect(page.locator('#software')).toHaveAttribute(
-    'data-enhanced',
-    'true',
-  );
+  await expect(page.locator('#software')).toHaveAttribute('data-enhanced', 'true');
+}
+const current = (page: Page) =>
+  page.$eval('.sw-steps [aria-current="step"] .sw-step__title', (e) => e.textContent ?? '');
+const activeTab = (page: Page) =>
+  page.$eval('.sw-app .iw-tab[data-active="true"]', (e) => e.textContent ?? '');
+async function showTour(page: Page) {
+  await page.locator('.sw-stage').evaluate((el) => el.scrollIntoView({ block: 'center' }));
 }
 
-test.describe('IWMS in Action (M6.2)', () => {
-  test('prerendered page: #software follows #ecosystem with every demonstration and the disclosure', () => {
-    const html = readFileSync(
-      resolve(process.cwd(), 'dist/index.html'),
-      'utf8',
-    );
+test.describe('IWMS in Action (M6 dashboard tour)', () => {
+  test('prerendered page: #software follows #ecosystem with the tours, steps, dashboard and disclosure', () => {
+    const html = readFileSync(resolve(process.cwd(), 'dist/index.html'), 'utf8');
     const eco = html.indexOf('id="ecosystem"');
     const sw = html.indexOf('id="software"');
     expect(eco).toBeGreaterThan(-1);
@@ -33,158 +54,167 @@ test.describe('IWMS in Action (M6.2)', () => {
     const section = html.slice(sw);
     expect(section).toContain(amp(softwareContent.title));
     expect(section).toContain(amp(softwareContent.disclosure));
-    for (const d of SOFTWARE_DEMOS) {
-      expect(section, d.id).toContain(amp(d.title));
-      expect(section, d.id).toContain(`id="software-${d.id}"`);
+    expect(section).toContain(dashboardLabels.inwardTitle);
+    for (const t of dashboardLabels.tabs) expect(section).toContain(t.label);
+    for (const tour of TOURS) {
+      expect(section, tour.id).toContain(amp(tour.label));
+      for (const s of tour.steps) expect(section, s.id).toContain(amp(s.title));
+    }
+  });
+
+  test('sanitised: no real identities anywhere, no digits in the dashboard data', async ({ page }) => {
+    await open(page);
+    const html = await page.content();
+    for (const name of REAL_NAMES) expect(html.toUpperCase(), name).not.toContain(name.toUpperCase());
+    // Walk both dashboards: every value is masked (pager numbers are UI, not data).
+    for (const tour of [0, 1]) {
+      await page.locator('.sw-tourbtn').nth(tour).click();
+      await page.locator('.sw-step').last().click();
+      await page.waitForTimeout(900);
+      const text = await page.$eval('.sw-app', (el) => {
+        const clone = el.cloneNode(true) as HTMLElement;
+        clone.querySelectorAll('.iw-pager').forEach((p) => p.remove());
+        return clone.textContent ?? '';
+      });
+      expect(text, `tour ${tour}`).not.toMatch(/\d/);
     }
   });
 
   test.describe('without JavaScript', () => {
     test.use({ javaScriptEnabled: false });
-    test('all four demonstrations and every stage caption are shown, selectors are links', async ({
-      page,
-    }) => {
+    test('the dashboard still and every tour step are readable', async ({ page }) => {
       await page.goto('/');
       const section = page.locator('#software');
       await expect(section).toHaveAttribute('data-enhanced', 'false');
-      await expect(section.locator('[role="tablist"]')).toHaveCount(0);
-      await expect(section.locator('.sw-sels--static a')).toHaveCount(4);
-      for (const d of SOFTWARE_DEMOS) {
-        const demo = section.locator(`#software-${d.id}`);
-        await expect(demo).toBeVisible();
-        await expect(
-          section.locator(`.sw-sels--static a[href="#software-${d.id}"]`),
-        ).toHaveCount(1);
-        for (const s of d.stages)
-          await expect(demo.locator('.sw-step__caption')).toContainText([
-            s.caption,
-          ]);
-      }
+      await expect(section.locator('.sw-app .iw')).toBeVisible();
+      await expect(section.locator('.sw-static')).toHaveCount(TOURS.length);
+      for (const t of TOURS)
+        for (const s of t.steps) await expect(section.getByText(s.caption)).toBeVisible();
+      await expect(section.locator('button')).toHaveCount(0);
     });
   });
 
-  test('tabs switch the one visible demonstration; regions, markers and no fictional data', async ({
-    page,
-  }) => {
+  test('autoplays once when half on screen; pauses on hover and off-screen', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(String(e)));
     await open(page);
-    const section = page.locator('#software');
-    await expect(section.locator('.sw__badge')).toBeVisible();
-    await expect(section.locator('.sw__badge')).toHaveText(
-      softwareContent.disclosure,
-    );
-    const tabs = section.locator('[role="tablist"] [role="tab"]');
-    await expect(tabs).toHaveCount(4);
-    await expect(tabs.first()).toHaveAttribute('aria-selected', 'true');
-    await expect(section.locator('[role="tab"][tabindex="0"]')).toHaveCount(1);
+    // Not playing before it is seen.
+    await page.waitForTimeout(1200);
+    expect(await current(page)).toBe(TOURS[0].steps[0].title);
+    await page.mouse.move(5, 5);
+    await showTour(page);
+    // Step 1 clicks the Inward tab: the cursor appears and the tab switches.
+    await expect(page.locator('.sw-cursor')).toHaveCount(1);
+    await expect.poll(() => activeTab(page)).toBe('Inward Dashboard');
+    await expect.poll(() => current(page), { timeout: 6000 }).toBe(TOURS[0].steps[1].title);
+    await expect(page.locator('.sw-ctl--primary')).toHaveAttribute('aria-pressed', 'true');
 
-    const visible = () =>
-      section
-        .locator('.sw-demo')
-        .evaluateAll((els) =>
-          els
-            .filter((e) => (e as HTMLElement).offsetParent !== null)
-            .map((e) => e.id),
-        );
-    await tabs.first().focus();
-    for (let i = 0; i < SOFTWARE_DEMOS.length; i++) {
-      const d = SOFTWARE_DEMOS[i];
-      await expect(tabs.nth(i)).toBeFocused();
-      await expect(tabs.nth(i)).toHaveAttribute('aria-selected', 'true');
-      expect(await visible()).toEqual([`software-${d.id}`]);
-      const demo = section.locator(`#software-${d.id}`);
-      await expect(demo).toHaveAttribute('role', 'tabpanel');
-      const frame = demo.locator('figure.sw-frame');
-      await expect(frame).toHaveAttribute(
-        'aria-label',
-        new RegExp(`^Illustrative IWMS ${d.title}`),
-      );
-      // Every region referenced by the callouts exists in the composition.
-      for (const s of d.stages)
-        for (const co of s.callouts)
-          await expect(
-            frame.locator(`[data-region="${co.region}"]`),
-            `${d.id}:${co.region}`,
-          ).toHaveCount(1);
-      // Active stage (step 1): one numbered marker per callout, on its region.
-      const callouts = d.stages[0].callouts;
-      await expect(frame.locator('.sw-marker')).toHaveCount(callouts.length);
-      for (const [n, co] of callouts.entries())
-        await expect(
-          frame.locator(`[data-region="${co.region}"] > .sw-marker`),
-        ).toHaveText(String(n + 1));
-      await expect(demo.locator('.sw-callout')).toHaveCount(callouts.length);
-      await expect(demo.locator('.sw-ctl[aria-disabled="true"]')).toHaveCount(
-        2,
-      );
-      // No numbers in the screen except the marker badges and level ordinals.
-      const text = await frame.evaluate((el) => {
-        const c = el.cloneNode(true) as HTMLElement;
-        c.querySelectorAll('.sw-marker, .sw-ord').forEach((n) => n.remove());
-        return c.textContent ?? '';
-      });
-      // The official module name ("D2D …") is the only verified text with a digit.
-      expect(text.split(d.title).join(''), d.id).not.toMatch(/\d/);
-      await page.keyboard.press('ArrowRight');
-    }
-    // Wraps around; End / Home.
-    await expect(tabs.first()).toHaveAttribute('aria-selected', 'true');
-    await page.keyboard.press('End');
-    await expect(tabs.last()).toBeFocused();
-    expect(await visible()).toEqual(['software-landfill']);
-    await page.keyboard.press('Home');
-    expect(await visible()).toEqual(['software-fleet']);
+    // Hover pauses.
+    await page.locator('.sw-stage').hover();
+    const held = await current(page);
+    await page.waitForTimeout(4200);
+    expect(await current(page)).toBe(held);
+    // Leaving resumes; off-screen pauses again.
+    await page.mouse.move(5, 5);
+    await expect.poll(() => current(page), { timeout: 6000 }).not.toBe(held);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(300);
+    const away = await current(page);
+    await page.waitForTimeout(4200);
+    expect(await current(page)).toBe(away);
     expect(errors).toEqual([]);
   });
 
-  test('phone 390×844: no horizontal overflow, heading clear of the fixed header', async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
+  test('controls: tour selection, pause, back/next, step list, replay; overlays track targets', async ({ page }) => {
     await open(page);
-    for (const d of SOFTWARE_DEMOS) {
-      await page.locator(`#software-tab-${d.id}`).click();
-      const m = await page.evaluate(() => ({
-        doc: document.documentElement.scrollWidth,
-        vw: innerWidth,
-      }));
-      expect(m.doc, d.id).toBe(m.vw);
-    }
-    const r = await page.evaluate(async () => {
-      const s = document.querySelector('#software')!;
-      window.scrollTo({
-        top: s.getBoundingClientRect().top + window.scrollY,
-        behavior: 'instant',
-      });
-      await new Promise((f) => requestAnimationFrame(() => f(null)));
-      await new Promise((f) => requestAnimationFrame(() => f(null)));
-      const top = s.getBoundingClientRect().top;
-      return {
-        top,
-        header: document.querySelector('.site-header')!.getBoundingClientRect()
-          .bottom,
-        title: document
-          .querySelector('#software-title')!
-          .getBoundingClientRect().top,
-      };
+    await page.mouse.move(5, 5);
+    await showTour(page);
+    // Choose the Sorting tour: it starts on Inward and clicks over to Sorting.
+    await page.locator('.sw-tourbtn').nth(1).click();
+    await expect(page.locator('.sw-tourbtn').nth(1)).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => activeTab(page)).toBe('Sorting Dashboard');
+    // Pause stops progression.
+    await page.locator('.sw-ctl--primary').click();
+    await expect(page.locator('.sw-ctl--primary')).toHaveAttribute('aria-pressed', 'false');
+    const paused = await current(page);
+    await page.waitForTimeout(3600);
+    expect(await current(page)).toBe(paused);
+    // Next / Back and the step list.
+    await page.locator('.sw-step').nth(1).click();
+    expect(await current(page)).toBe(TOURS[1].steps[1].title);
+    await page.getByRole('button', { name: softwareContent.next }).click();
+    expect(await current(page)).toBe(TOURS[1].steps[2].title);
+    await page.waitForTimeout(1000);
+    // The ring surrounds the step's target, the summary row is hovered.
+    const fit = await page.evaluate(() => {
+      const ring = document.querySelector('.sw-ring')!.getBoundingClientRect();
+      const t = document.querySelector('[data-tour="sorting-summary"]')!.getBoundingClientRect();
+      return Math.max(
+        Math.abs(ring.left + 4 - t.left),
+        Math.abs(ring.top + 4 - t.top),
+        Math.abs(ring.width - 8 - t.width),
+        Math.abs(ring.height - 8 - t.height),
+      );
     });
-    expect(Math.abs(r.top)).toBeLessThanOrEqual(2);
-    expect(r.title).toBeGreaterThanOrEqual(r.header);
+    expect(fit).toBeLessThanOrEqual(2);
+    await expect(page.locator('[data-tour="summary-row"]')).toHaveAttribute('data-hover', 'true');
+    await page.getByRole('button', { name: softwareContent.back }).click();
+    expect(await current(page)).toBe(TOURS[1].steps[1].title);
+    // Replay restarts the full tour from the beginning and plays.
+    await page.getByRole('button', { name: softwareContent.replay }).click();
+    await expect(page.locator('.sw-tourbtn').first()).toHaveAttribute('aria-pressed', 'true');
+    expect(await current(page)).toBe(TOURS[0].steps[0].title);
+    await expect(page.locator('.sw-ctl--primary')).toHaveAttribute('aria-pressed', 'true');
+    // Keyboard: Tab reaches the controls, with a visible focus ring.
+    await page.locator('.sw-step').last().focus();
+    await page.keyboard.press('Tab');
+    const focused = await page.evaluate(() => ({
+      cls: document.activeElement?.className ?? '',
+      outline: getComputedStyle(document.activeElement!).outlineStyle,
+    }));
+    expect(focused.cls).toContain('sw-ctl');
+    expect(focused.outline).not.toBe('none');
   });
 
   test.describe('reduced motion', () => {
     test.use({ reducedMotion: 'reduce' });
-    test('no transitions in the section', async ({ page }) => {
+    test('no autoplay, no cursor, no play controls; steps switch instantly', async ({ page }) => {
       await open(page);
-      const durations = await page
-        .locator('#software .sw-sel, #software .sw-source')
-        .evaluateAll((els) =>
-          els.map((e) => getComputedStyle(e).transitionDuration),
-        );
-      expect(durations.length).toBeGreaterThan(0);
-      for (const d of durations)
-        expect(d.split(',').every((x) => parseFloat(x) === 0)).toBe(true);
+      await showTour(page);
+      await page.waitForTimeout(2500);
+      expect(await current(page)).toBe(TOURS[0].steps[0].title);
+      await expect(page.locator('.sw-cursor')).toHaveCount(0);
+      await expect(page.getByRole('button', { name: softwareContent.play })).toHaveCount(0);
+      await page.locator('.sw-tourbtn').nth(1).click();
+      await page.getByRole('button', { name: softwareContent.next }).click();
+      expect(await current(page)).toBe(TOURS[1].steps[1].title);
+      expect(await activeTab(page)).toBe('Sorting Dashboard');
+      const anim = await page.$eval('.iw-cellbar', (e) => getComputedStyle(e).animationName);
+      expect(anim).toBe('none');
+    });
+  });
+
+  test.describe('portrait phone', () => {
+    test.use({ viewport: { width: 390, height: 844 } });
+    test('one readable panel per step, no cursor, no horizontal overflow', async ({ page }) => {
+      await open(page);
+      await page.mouse.move(5, 5);
+      await showTour(page);
+      await expect(page.locator('.sw-app .iw--focus')).toHaveCount(1);
+      await expect(page.locator('.sw-cursor')).toHaveCount(0);
+      await page.locator('.sw-tourbtn').nth(1).click();
+      await page.locator('.sw-ctl--primary').click();
+      for (const target of ['kpis', 'sorting-summary']) {
+        await page.locator('.sw-step').nth(target === 'kpis' ? 1 : 2).click();
+        await expect(page.locator(`.iw-focus [data-tour="${target}"]`)).toBeVisible();
+      }
+      const m = await page.evaluate(() => ({
+        docW: document.documentElement.scrollWidth,
+        vw: innerWidth,
+        font: parseFloat(getComputedStyle(document.querySelector('.iw-focus td')!).fontSize),
+      }));
+      expect(m.docW).toBe(m.vw);
+      expect(m.font).toBeGreaterThanOrEqual(12);
     });
   });
 });
