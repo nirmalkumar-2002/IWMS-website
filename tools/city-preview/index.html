@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0a0f1c" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Scene 04 static city v2 (proposal preview)</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- No JS: the preview shows the image and the module list (production keeps its full
+         no-JS module list). -->
+    <noscript>
+      <style>
+        body {
+          margin: 0;
+          padding: 1.5rem;
+          background: #0a0f1c;
+          color: #e8edf5;
+          font-family: system-ui, sans-serif;
+        }
+        .nojs {
+          max-width: 1200px;
+          margin: 0 auto;
+        }
+        .nojs img {
+          display: block;
+          width: 100%;
+          height: auto;
+          border-radius: 14px;
+        }
+        .nojs li {
+          margin: 0.3rem 0;
+        }
+      </style>
+      <div class="nojs">
+        <h1>One connected platform for every waste operation</h1>
+        <picture>
+          <source
+            media="(max-width: 767px)"
+            srcset="/tools/static-city/city-mobile-1080.jpg"
+          />
+          <img
+            src="/tools/static-city/city-desktop-1920.jpg"
+            alt="Illustrated miniature city: homes and bins, collection vehicles, a crew depot, a weighbridge, a processing plant, an engineered landfill, citizens and the city command centre."
+          />
+        </picture>
+        <h2>IWMS modules</h2>
+        <ol>
+          <li>Collection &amp; Verification</li>
+          <li>D2D Collection &amp; Logistics Management</li>
+          <li>Resource Management</li>
+          <li>Weighbridge Management</li>
+          <li>Waste Management (Processing)</li>
+          <li>Landfill Management</li>
+          <li>Grievance Redressal Management</li>
+        </ol>
+        <p>Integration: ICCC Integration</p>
+      </div>
+    </noscript>
+    <script type="module" src="./preview.tsx"></script>
+  </body>
+</html>
