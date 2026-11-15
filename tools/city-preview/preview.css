@@ -1,0 +1,949 @@
+/* PROPOSAL PREVIEW v2 — Scene 04 static city. Mirrors components/ecosystem/{ecosystem,stage}.css
+   (tokens, pills, popup card) under a cp__ prefix so production is untouched. Overview shows small
+   numbered pins only; full labels on hover / pill focus / selection. No connection lines.
+   CSS transitions only; all disabled under reduced motion. */
+:root {
+  --font-inter: 'Inter';
+  --font-display: 'Montserrat';
+  --night-950: #0a0f1c;
+  --amber: #ffa526;
+  --text-light: #e8edf5;
+  --text-muted: rgba(232, 237, 245, 0.72);
+  --gutter: clamp(1rem, 4vw, 4rem);
+  --signal: #a6dcc8;
+  --signal-dim: rgba(166, 220, 200, 0.4);
+  --line: rgba(232, 237, 245, 0.12);
+  --card: #111a2b;
+  --float-bg: rgba(11, 17, 30, 0.95);
+  --popup-bg: rgba(10, 15, 28, 0.78);
+  color-scheme: dark;
+  background: var(--night-950);
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--night-950);
+  color: var(--text-light);
+  font-family:
+    var(--font-inter),
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  line-height: 1.6;
+  overflow-x: clip;
+  -webkit-font-smoothing: antialiased;
+}
+a {
+  color: inherit;
+  text-underline-offset: 0.25em;
+}
+
+.cp {
+  position: relative;
+  min-height: 100vh;
+  background:
+    radial-gradient(
+      70% 40% at 50% 30%,
+      rgba(58, 74, 102, 0.2),
+      transparent 70%
+    ),
+    linear-gradient(
+      to bottom,
+      var(--night-950) 0%,
+      #0d1526 45%,
+      var(--night-950) 100%
+    );
+}
+.cp {
+  /* Production's fixed site header height (ecosystem.css --eco-header). */
+  --hdr: 76px;
+}
+.cp__header {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  height: var(--hdr);
+  padding: 0 var(--gutter);
+  background: rgba(10, 15, 28, 0.96);
+  border-bottom: 1px solid rgba(232, 237, 245, 0.06);
+  font-family: var(--font-display), 'Segoe UI', system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+.cp__header-badge {
+  min-width: 0;
+  overflow: hidden;
+  padding: 0.2rem 0.7rem;
+  border: 1px dashed rgba(232, 237, 245, 0.25);
+  border-radius: 999px;
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-size: 0.66rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+}
+.cp__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: calc(1200px + 2 * var(--gutter));
+  margin: 0 auto;
+  padding: calc(var(--hdr) + clamp(1.25rem, 3vh, 2.5rem)) var(--gutter) 5rem;
+}
+.cp__inner > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.cp__error {
+  padding: 2rem;
+  color: var(--amber);
+}
+
+/* Header */
+.cp__head {
+  max-width: 64rem;
+  text-align: center;
+}
+.cp__eyebrow {
+  margin: 0 0 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--signal);
+}
+.cp__title {
+  margin: 0;
+  font-family: var(--font-display), 'Segoe UI', system-ui, sans-serif;
+  font-weight: 600;
+  font-size: clamp(1.7rem, 2.7vw, 2.45rem);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.cp__lead {
+  max-width: 40rem;
+  margin: 0.8rem auto 0;
+  font-size: clamp(0.95rem, 1.05vw, 1.05rem);
+  line-height: 1.6;
+  color: var(--text-muted);
+  text-wrap: pretty;
+}
+
+/* Module pills (tablist) */
+.cp__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+.cp__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 40px;
+  padding: 0 1rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(232, 237, 245, 0.03);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+.cp__pill:hover {
+  color: var(--text-light);
+  border-color: rgba(232, 237, 245, 0.28);
+}
+.cp__pill[aria-selected='true'] {
+  color: var(--text-light);
+  background: rgba(255, 165, 38, 0.1);
+  border-color: var(--amber);
+}
+.cp__pill[data-kind='integration'][aria-selected='true'] {
+  background: rgba(166, 220, 200, 0.1);
+  border-color: var(--signal);
+}
+.cp__pill-n {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  color: var(--signal);
+}
+.cp__pill[aria-selected='true'] .cp__pill-n {
+  color: var(--amber);
+}
+.cp__tabs-divider {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0.35rem;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.cp__tabs-divider::before {
+  content: '';
+  width: 1px;
+  height: 22px;
+  background: var(--line);
+}
+
+/* Focus rings */
+.cp
+  :is(
+    .cp__pill,
+    .cp__link,
+    .cp__source,
+    .cp__details-btn,
+    .cp__close-btn,
+    .cp__overview-btn,
+    .cp__popup-close
+  ):focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+/* City view: a fixed-aspect image box (aspect from city.json, set as --aspect), so percent-
+   positioned pins and the zone overlay line up exactly at every width (no object-fit crop).
+   The aspect-ratio reserves the box before the image loads (no layout shift).
+   >=768px: width = min(content width, available height x aspect), where the available height is
+   the viewport minus the fixed header, the pill row (--pills-h, measured) and the margins, so the
+   whole city fits below the pills once they reach the header. Centred: equal outer margins. */
+.cp__view {
+  position: relative;
+  width: 100%;
+  margin-top: 1.25rem;
+}
+@media (min-width: 768px) {
+  .cp__view {
+    --avail-h: max(
+      320px,
+      100svh - var(--hdr) - var(--pills-h, 48px) - 1.5rem - 1.25rem - 1.5rem
+    );
+    width: min(100%, var(--avail-h) * var(--aspect, 1.7778));
+    margin-inline: auto;
+  }
+}
+.cp__stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: var(--aspect, 1.7778);
+  border-radius: 18px;
+  background: linear-gradient(160deg, #0f1828 0%, var(--night-950) 100%);
+  overflow: hidden;
+  user-select: none;
+}
+/* Border drawn on top (not on the box) so the image area is exactly the box. */
+.cp__stage::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  border: 1px solid rgba(232, 237, 245, 0.1);
+  border-radius: inherit;
+  pointer-events: none;
+}
+.cp__picture,
+.cp__img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.cp__placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: end center;
+  padding-bottom: 12px;
+  background:
+    linear-gradient(rgba(232, 237, 245, 0.035) 1px, transparent 1px) 0 0 / 40px
+      40px,
+    linear-gradient(90deg, rgba(232, 237, 245, 0.035) 1px, transparent 1px) 0
+      0 / 40px 40px,
+    radial-gradient(80% 70% at 50% 45%, #1d2a42, #0c1322 75%);
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(232, 237, 245, 0.35);
+}
+
+/* Zone overlay (SVG in CSS px of the image box). */
+.cp__zones {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.cp__zone-ghost {
+  fill: rgba(232, 237, 245, 0.05);
+  stroke: rgba(232, 237, 245, 0.16);
+  stroke-width: 1;
+}
+.cp__dim {
+  fill: rgba(4, 7, 14, 0.1);
+  animation: cp-fade 0.25s ease-out both;
+}
+.cp__zone-sel {
+  fill: rgba(255, 165, 38, 0.18);
+  stroke: var(--amber);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  animation: cp-fade 0.25s ease-out both;
+}
+@keyframes cp-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Pins: a zero-size button at the anchor. A small ground dot sits on the anchor, a 22px numbered
+   badge floats above it (short stem), and an invisible hit area (32px; 44px on phones) surrounds
+   the badge. The full label is hidden in the overview and shows for the selected zone, on pin
+   hover, and while the matching pill is hovered or keyboard-focused (data-label="show"). A pin
+   the floating popup covers is hidden (data-covered). Label position (--dx, data-flip) is
+   computed once per layout change. */
+.cp__pins {
+  position: absolute;
+  inset: 0;
+}
+.cp__pin {
+  position: absolute;
+  z-index: 1;
+  width: 0;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.cp__pin::before {
+  content: '';
+  position: absolute;
+  left: -16px;
+  top: -33px;
+  width: 32px;
+  height: 36px;
+}
+.cp__pin:hover,
+.cp__pin[data-label='show'] {
+  z-index: 2;
+}
+.cp__pin[data-state='selected'] {
+  z-index: 3;
+}
+.cp__pin[data-covered='true'] {
+  visibility: hidden;
+  opacity: 0;
+}
+.cp__pin-dot {
+  position: absolute;
+  left: -3px;
+  top: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(232, 237, 245, 0.9);
+  box-shadow: 0 0 0 2px rgba(10, 15, 28, 0.55);
+}
+.cp__pin-dot::before {
+  /* Stem from the dot up to the badge. */
+  content: '';
+  position: absolute;
+  left: 2px;
+  bottom: 5px;
+  width: 2px;
+  height: 7px;
+  border-radius: 1px;
+  background: rgba(232, 237, 245, 0.7);
+}
+.cp__pin-badge {
+  position: absolute;
+  left: -11px;
+  top: -28px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid rgba(232, 237, 245, 0.75);
+  border-radius: 50%;
+  background: rgba(10, 15, 28, 0.88);
+  box-shadow: 0 2px 6px rgba(3, 6, 14, 0.45);
+  color: var(--text-light);
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+.cp__pin[data-kind='integration'] .cp__pin-badge {
+  border-color: var(--signal);
+  color: var(--signal);
+}
+.cp__pin:hover .cp__pin-badge,
+.cp__pin[data-label='show'] .cp__pin-badge {
+  border-color: var(--signal);
+}
+.cp__pin[data-state='selected'] .cp__pin-badge {
+  border-color: var(--amber);
+  background: var(--amber);
+  color: #1a1206;
+}
+.cp__pin[data-state='selected'] .cp__pin-dot,
+.cp__pin[data-state='selected'] .cp__pin-dot::before {
+  background: var(--amber);
+}
+.cp__pin-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.55rem;
+  border: 1px solid rgba(166, 220, 200, 0.6);
+  border-radius: 999px;
+  background: rgba(10, 15, 28, 0.9);
+  color: var(--text-light);
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+  /* Above the badge: bottom edge 6px over the badge top (anchor - 28px). */
+  transform: translate(calc(-50% + var(--dx, 0px)), calc(-100% - 34px));
+  visibility: hidden;
+  opacity: 0;
+  transition:
+    opacity 0.15s ease,
+    visibility 0.15s;
+}
+.cp__pin[data-flip='true'] .cp__pin-label {
+  transform: translate(calc(-50% + var(--dx, 0px)), 9px);
+}
+.cp__pin:hover .cp__pin-label,
+.cp__pin[data-label='show'] .cp__pin-label {
+  visibility: visible;
+  opacity: 1;
+}
+.cp__pin[data-covered='true'] .cp__pin-label {
+  visibility: hidden;
+}
+.cp__pin-n {
+  color: var(--signal);
+  font-variant-numeric: tabular-nums;
+}
+.cp__pin[data-state='selected'] .cp__pin-label {
+  border-color: var(--amber);
+  background: var(--amber);
+  color: #1a1206;
+}
+.cp__pin[data-state='selected'] .cp__pin-n {
+  color: #1a1206;
+}
+
+/* Overview hint (bottom-left) and Return to overview (top-left). */
+.cp__hint {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: calc(100% - 32px);
+  margin: 0;
+  padding: 0.35rem 0.75rem 0.35rem 0.6rem;
+  border: 1px solid rgba(232, 237, 245, 0.14);
+  border-radius: 999px;
+  background: rgba(10, 15, 28, 0.8);
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  line-height: 1.3;
+  pointer-events: none;
+}
+.cp__hint svg {
+  flex: none;
+  color: var(--amber);
+}
+.cp__details-btn,
+.cp__overview-btn,
+.cp__close-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 36px;
+  padding: 0 0.85rem;
+  border: 1px solid rgba(232, 237, 245, 0.22);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-light);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+.cp__overview-btn {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  z-index: 4;
+  min-height: 34px;
+  padding: 0 0.8rem 0 0.65rem;
+  border-color: rgba(232, 237, 245, 0.18);
+  background: rgba(10, 15, 28, 0.85);
+  font-size: 0.76rem;
+}
+.cp__overview-btn svg {
+  color: var(--amber);
+}
+.cp__overview-btn:hover {
+  border-color: rgba(232, 237, 245, 0.45);
+  background: rgba(10, 15, 28, 0.95);
+}
+.cp__details-btn {
+  border-color: rgba(255, 165, 38, 0.55);
+  background: rgba(255, 165, 38, 0.08);
+}
+.cp__details-btn:hover {
+  border-color: var(--amber);
+  background: rgba(255, 165, 38, 0.14);
+}
+.cp__details-btn svg {
+  transition: transform 0.15s ease;
+}
+.cp__details-btn[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+.cp__close-btn {
+  flex: none;
+  min-height: 32px;
+  padding: 0 0.7rem;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+.cp__close-btn:hover {
+  border-color: rgba(232, 237, 245, 0.5);
+}
+
+.cp__note {
+  margin: 1.25rem 0 0;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* The tabpanel: the selected module's summary (in flow below the image, or floating) + details. */
+.cp__card {
+  display: grid;
+  gap: 0.75rem;
+  width: 100%;
+  min-width: 0;
+  margin-top: 1rem;
+}
+.cp__details[hidden] {
+  display: none;
+}
+.cp__summary,
+.cp__details {
+  min-width: 0;
+  padding: 1.15rem 1.3rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+}
+.cp__card-tag {
+  margin: 0;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+.cp__card[data-kind='integration'] .cp__card-tag,
+.cp__popup-twin[data-kind='integration'] .cp__card-tag {
+  color: var(--signal);
+}
+.cp__card-place {
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+}
+.cp__card-title {
+  margin: 0.4rem 0 0;
+  font-family: var(--font-display), 'Segoe UI', system-ui, sans-serif;
+  font-size: 1.1rem;
+  font-weight: 600;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+.cp__card-note {
+  margin: 0.55rem 0 0;
+  padding: 0.4rem 0.6rem;
+  border: 1px dashed var(--signal-dim);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--signal);
+}
+.cp__card-summary {
+  margin: 0.5rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+  text-wrap: pretty;
+}
+.cp__highlights,
+.cp__card-list {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+.cp__card-list {
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+.cp__highlights li,
+.cp__card-list li {
+  position: relative;
+  padding-left: 0.95rem;
+}
+.cp__highlights li::before,
+.cp__card-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.5em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--signal);
+}
+.cp__summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+.cp__details-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.25rem;
+  border-bottom: 1px solid var(--line);
+}
+.cp__details-title {
+  margin: 0;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.cp__details-name {
+  color: var(--text-light);
+  letter-spacing: 0.08em;
+}
+.cp__details-grid {
+  display: grid;
+  gap: 0 2.5rem;
+}
+.cp__card-sub {
+  margin: 1rem 0 0.45rem;
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.cp__card-benefit {
+  margin: 1rem 0 0;
+  padding: 0.7rem 0.85rem;
+  border-left: 2px solid var(--amber);
+  border-radius: 0 8px 8px 0;
+  background: rgba(255, 165, 38, 0.06);
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.cp__card-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cp__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-light);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.cp__link:hover {
+  border-color: var(--signal-dim);
+}
+.cp__source {
+  display: inline-block;
+  margin-top: 0.9rem;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+.cp__source:hover {
+  color: var(--text-light);
+}
+
+@media (min-width: 768px) {
+  .cp__details-grid {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  }
+  .cp__summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    gap: 0 2.5rem;
+    align-items: start;
+  }
+  .cp__summary-aside .cp__highlights {
+    margin-top: 0.15rem;
+  }
+
+  /* Floating popup: origin = the image box's top-left (the view's top-left); the computed
+     placement is applied as a translate. The twin has the same box, hidden, for measurement. */
+  .cp__popup {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 6;
+    display: block;
+    width: 19.5rem;
+    max-width: calc(100% - 32px);
+    padding: 1rem 1.1rem;
+    border: 1px solid rgba(232, 237, 245, 0.14);
+    border-radius: 12px;
+    background: var(--float-bg);
+    box-shadow:
+      0 18px 40px rgba(3, 6, 14, 0.5),
+      0 2px 6px rgba(3, 6, 14, 0.35);
+    overflow: hidden;
+    animation: cp-popup-in 0.2s ease-out both;
+  }
+  @supports (
+    (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+  ) {
+    .cp__popup:not(.cp__popup-twin) {
+      background: var(--popup-bg);
+      -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
+    }
+  }
+  .cp__popup-twin {
+    visibility: hidden;
+    pointer-events: none;
+    animation: none;
+  }
+  /* Accent on the edge facing the zone (amber; signal for the ICCC). */
+  .cp__popup:not(.cp__popup-twin)::before {
+    content: '';
+    position: absolute;
+    top: 1rem;
+    left: 0;
+    width: 2px;
+    height: 1.5rem;
+    border-radius: 0 2px 2px 0;
+    background: var(--amber);
+  }
+  .cp__popup[data-side='left']::before {
+    left: auto;
+    right: 0;
+    border-radius: 2px 0 0 2px;
+  }
+  .cp__card[data-kind='integration'] .cp__popup::before {
+    background: var(--signal);
+  }
+  .cp__popup .cp__card-tag {
+    padding-right: 2rem;
+  }
+  .cp__popup .cp__card-title {
+    font-size: 1.04rem;
+  }
+  .cp__popup .cp__card-summary {
+    font-size: 0.84rem;
+  }
+  .cp__popup .cp__summary-aside .cp__highlights {
+    margin-top: 0.7rem;
+  }
+  .cp__popup .cp__summary-actions {
+    margin-top: 0.85rem;
+  }
+  .cp__popup .cp__details-btn {
+    min-height: 32px;
+    padding: 0 0.75rem;
+    font-size: 0.76rem;
+  }
+  .cp__popup-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition:
+      color 0.15s ease,
+      border-color 0.15s ease;
+  }
+  .cp__popup-close:hover {
+    color: var(--text-light);
+    border-color: rgba(232, 237, 245, 0.3);
+  }
+  /* One popup element for all modules: it fades in when it opens, and switching modules (or a
+     resize) glides it to its new placement while the content swaps. */
+  .cp__popup:not(.cp__popup-twin) {
+    transition: transform 0.35s cubic-bezier(0.33, 0, 0.2, 1);
+  }
+}
+@keyframes cp-popup-in {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+    scale: 0.98;
+  }
+}
+/* Tablet: a smaller popup; the highlights stay in the details. */
+@media (min-width: 768px) and (max-width: 1099px) {
+  .cp__popup {
+    width: 17rem;
+    padding: 0.9rem 1rem;
+  }
+  .cp__popup .cp__highlights {
+    display: none;
+  }
+}
+
+/* Phones: scrolling pill row with 44px targets; mobile composition; 44px pin hit areas; summary
+   always below the image (no floating popup). */
+@media (max-width: 767px) {
+  .cp__tabs {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    align-self: stretch;
+    max-width: none;
+    margin-inline: calc(-1 * var(--gutter));
+    padding: 4px var(--gutter) 0.4rem;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: var(--gutter);
+    scrollbar-width: thin;
+  }
+  .cp__pill {
+    flex: 0 0 auto;
+    min-height: 44px;
+    scroll-snap-align: start;
+  }
+  .cp__tabs-divider {
+    margin: 0 0.15rem;
+  }
+  .cp__stage {
+    border-radius: 14px;
+  }
+  .cp__hint {
+    left: 10px;
+    bottom: 10px;
+    font-size: 0.68rem;
+  }
+  .cp__overview-btn {
+    left: 10px;
+    top: 10px;
+    min-height: 44px;
+  }
+  .cp__summary,
+  .cp__details {
+    padding: 1rem 1.05rem;
+  }
+  .cp__details-btn,
+  .cp__close-btn,
+  .cp__link {
+    min-height: 44px;
+  }
+  .cp__summary-actions > * {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+  .cp__pin::before {
+    left: -22px;
+    top: -39px;
+    width: 44px;
+    height: 44px;
+  }
+  .cp__pin-label {
+    padding: 0.16rem 0.45rem;
+    font-size: 0.62rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cp *,
+  .cp *::before,
+  .cp *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

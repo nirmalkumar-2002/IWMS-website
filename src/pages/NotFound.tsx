@@ -1,13 +1,10 @@
-import { Section } from '@/components/ui/Section';
-import { Heading } from '@/components/ui/Heading';
-import { Button } from '@/components/ui/Button';
 import { sharedContent } from '@/content/shared';
 export default function NotFound() {
   return (
-    <Section id="not-found">
-      <Heading as="h1">{sharedContent.notFoundTitle}</Heading>
+    <section className="page">
+      <h1>{sharedContent.notFoundTitle}</h1>
       <p>{sharedContent.notFoundBody}</p>
-      <Button href="/">{sharedContent.back}</Button>
-    </Section>
+      <a href="/">{sharedContent.back}</a>
+    </section>
   );
 }

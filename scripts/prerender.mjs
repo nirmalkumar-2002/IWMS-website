@@ -37,6 +37,8 @@ for (const route of routes) {
   );
   await mkdir(dirname(destination), { recursive: true });
   await writeFile(destination, html);
+  if (route !== '/' && route !== '/404')
+    await writeFile(resolve('dist', `${route.slice(1)}.html`), html);
 }
 console.log(
   `Prerendered ${routes.length} marketing and preview pages into dist/.`,

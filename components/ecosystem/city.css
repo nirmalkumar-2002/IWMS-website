@@ -1,0 +1,236 @@
+/* Scene 04 static city view: the image box, the selected-zone highlight and the pins. The box
+   takes the full width of the section's content container and the image's own aspect ratio
+   (reserved before the image loads: no layout shift; no crop or stretch, so percentage-positioned
+   pins line up exactly). CSS transitions only; all disabled under reduced motion. */
+.eco__city {
+  position: relative;
+  width: 100%;
+  aspect-ratio: var(--city-ar, 16 / 9);
+  border-radius: 18px;
+  background: linear-gradient(160deg, #0f1828 0%, var(--night-950) 100%);
+  overflow: hidden;
+  user-select: none;
+}
+@media (max-width: 767px) {
+  .eco__city {
+    aspect-ratio: var(--city-ar-m, 1 / 1);
+    border-radius: 14px;
+  }
+}
+/* Thin border drawn on top (not on the box), so the image area is exactly the box. */
+.eco__city::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  border: 1px solid rgba(232, 237, 245, 0.1);
+  border-radius: inherit;
+  pointer-events: none;
+}
+.eco__city-picture {
+  display: contents;
+}
+.eco__city-img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Selection: soft amber footprint with a crisp outline; the rest dimmed by 10% (selected only). */
+.eco__zones {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.eco__zone-dim {
+  fill: rgba(4, 7, 14, 0.1);
+  animation: eco-zone-in 0.25s ease-out both;
+}
+.eco__zone-sel {
+  fill: rgba(255, 165, 38, 0.18);
+  stroke: var(--amber);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  animation: eco-zone-in 0.25s ease-out both;
+}
+@keyframes eco-zone-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Pins: a zero-size button at the anchor. A small ground dot sits on the anchor, a 22px numbered
+   badge floats above it on a short stem, and an invisible hit area (32px; 44px on phones)
+   surrounds the badge. The full label is hidden in the overview; it shows for the selected zone,
+   on pin hover and while the matching pill is hovered or keyboard-focused (data-label="show").
+   A pin under the floating popup is hidden (data-covered). */
+.eco__pins {
+  position: absolute;
+  inset: 0;
+}
+.eco__pin {
+  position: absolute;
+  z-index: 1;
+  width: 0;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.eco__pin::before {
+  content: '';
+  position: absolute;
+  left: -16px;
+  top: -33px;
+  width: 32px;
+  height: 36px;
+}
+.eco__pin:hover,
+.eco__pin[data-label='show'] {
+  z-index: 2;
+}
+.eco__pin[data-state='selected'] {
+  z-index: 3;
+}
+.eco__pin[data-covered='true'] {
+  visibility: hidden;
+  opacity: 0;
+}
+.eco__pin-dot {
+  position: absolute;
+  left: -3px;
+  top: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(232, 237, 245, 0.9);
+  box-shadow: 0 0 0 2px rgba(10, 15, 28, 0.55);
+}
+.eco__pin-dot::before {
+  /* Stem from the dot up to the badge. */
+  content: '';
+  position: absolute;
+  left: 2px;
+  bottom: 5px;
+  width: 2px;
+  height: 7px;
+  border-radius: 1px;
+  background: rgba(232, 237, 245, 0.7);
+}
+.eco__pin-badge {
+  position: absolute;
+  left: -11px;
+  top: -28px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid rgba(232, 237, 245, 0.75);
+  border-radius: 50%;
+  background: rgba(10, 15, 28, 0.88);
+  box-shadow: 0 2px 6px rgba(3, 6, 14, 0.45);
+  color: var(--text-light);
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+.eco__pin[data-kind='integration'] .eco__pin-badge {
+  border-color: var(--signal);
+  color: var(--signal);
+}
+.eco__pin:hover .eco__pin-badge,
+.eco__pin[data-label='show'] .eco__pin-badge {
+  border-color: var(--signal);
+}
+.eco__pin[data-state='selected'] .eco__pin-badge {
+  border-color: var(--amber);
+  background: var(--amber);
+  color: #1a1206;
+}
+.eco__pin[data-state='selected'] .eco__pin-dot,
+.eco__pin[data-state='selected'] .eco__pin-dot::before {
+  background: var(--amber);
+}
+.eco__pin-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.55rem;
+  border: 1px solid rgba(166, 220, 200, 0.6);
+  border-radius: 999px;
+  background: rgba(10, 15, 28, 0.9);
+  color: var(--text-light);
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+  /* Above the badge: bottom edge 6px over the badge top (anchor − 28px). */
+  transform: translate(calc(-50% + var(--dx, 0px)), calc(-100% - 34px));
+  visibility: hidden;
+  opacity: 0;
+  transition:
+    opacity 0.15s ease,
+    visibility 0.15s;
+}
+.eco__pin[data-flip='true'] .eco__pin-label {
+  transform: translate(calc(-50% + var(--dx, 0px)), 9px);
+}
+.eco__pin:hover .eco__pin-label,
+.eco__pin[data-label='show'] .eco__pin-label {
+  visibility: visible;
+  opacity: 1;
+}
+.eco__pin[data-covered='true'] .eco__pin-label {
+  visibility: hidden;
+}
+.eco__pin-n {
+  color: var(--signal);
+  font-variant-numeric: tabular-nums;
+}
+.eco__pin[data-state='selected'] .eco__pin-label {
+  border-color: var(--amber);
+  background: var(--amber);
+  color: #1a1206;
+}
+.eco__pin[data-state='selected'] .eco__pin-n {
+  color: #1a1206;
+}
+@media (max-width: 767px) {
+  .eco__pin::before {
+    left: -22px;
+    top: -39px;
+    width: 44px;
+    height: 44px;
+  }
+  .eco__pin-label {
+    padding: 0.16rem 0.45rem;
+    font-size: 0.62rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eco__city *,
+  .eco__city *::before,
+  .eco__city *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

@@ -8,8 +8,6 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-.next/
-out/
 *.tsbuildinfo
 .env*
 !.env.example
@@ -33,3 +31,6 @@ dist-ssr
 
 .prerender/
 dist/
+
+# Local Claude Code state (agent worktrees, settings)
+.claude/

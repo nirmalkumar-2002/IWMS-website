@@ -1,76 +1,80 @@
-import type { SectionContent } from './types';
+/** Hero copy. `title` and `subtitle` are approved; later scene blocks are marked where proposed. */
 export const heroContent = {
-  id: 'platform',
-  eyebrow: 'THE INTEGRATED WASTE MANAGEMENT SUITE',
-  title: 'From doorstep pickup to landfill. One accountable platform.',
-  description:
-    'IWMS unifies QR verification, GPS fleets, IoT weighbridges, CCTV/AI and citizen apps on one platform for cleaner, accountable cities.',
-  source: {
-    pages: [1, 2, 3, 6, 12, 24],
+  title: 'INTEGRATED WASTE MANAGEMENT SUITE',
+  subtitle: 'A unified digital platform for waste management.',
+  sceneLabel:
+    'Cinematic scene: a green municipal waste collection truck switches on its headlights on a quiet road before dawn, then pulls away.',
+  loading: 'Loading scene',
+  /**
+   * Product positioning under the title (Phase 3.3). PROPOSED — not yet approved. Capabilities
+   * only, taken from the IWMS brochure (QR verification, GPS tracking, weighbridge integration).
+   */
+  positioning:
+    'QR-verified household collection, GPS fleet tracking and weighbridge integration on one platform.',
+  /** Scene 02 copy. PROPOSED marketing lines — not yet approved; edit freely here. */
+  city: {
+    title: 'Smart Collection. Connected Cities.',
+    subtitle: 'GPS-enabled fleet tracking and optimized collection routes.',
   },
-  items: [
-    {
-      title: 'Aligned with SWM Rules',
-      body: 'Regulatory alignment',
+  /**
+   * Phase 3.1–3.2 copy (household collection & QR verification). PROPOSED — not yet approved.
+   * The monitor's operational values are illustrative demo data and are labelled as such.
+   */
+  collect: {
+    eyebrow: 'Smart collection',
+    title: 'Every household collection, verified.',
+    point: 'Collection point',
+    /** Field app on the collector's phone (no person is shown, only the device). */
+    phone: {
+      app: 'IWMS Collect',
+      align: 'Align the bin QR in the frame',
+      scanning: 'Scanning bin QR…',
+      verified: 'Bin QR verified',
+      wet: 'Wet waste',
     },
-    {
-      title: 'ICCC-ready',
-      body: 'Centralised oversight',
+    monitor: {
+      title: 'IWMS · Collection monitor',
+      demo: 'Illustrative demo data',
+      vehicle: 'Vehicle',
+      moving: 'km/h',
+      stopped: 'Stationary',
+      route: 'Route',
+      served: 'Households served',
+      next: 'Next point',
+      household: 'Household',
+      /** Three distinct states: GPS arrival is never verification; verification is not completion. */
+      states: {
+        arrived: 'Vehicle at household (GPS)',
+        awaiting: 'Awaiting scan',
+        verify: 'Bin QR verification',
+        verified: 'Bin QR verified',
+        completed: 'Collection completed',
+        pending: 'Pending',
+      },
     },
-    {
-      title: 'Web + Mobile + IoT',
-      body: 'Connected operations',
-    },
-    {
-      title: '12-month rollout',
-      body: 'Phased implementation',
-    },
-  ],
-  labels: {
-    sceneTitle: 'A cleaner journey. A clearer record.',
-    sceneEyebrow: 'CONNECTED AT EVERY STOP',
-    demoBefore: '1,248',
-    demoAfter: '1,249',
-    liveRecord: 'Collection record',
-    evidence: 'One pickup. Every detail accounted for.',
-    stepArrival: 'Arrival',
-    stepScan: 'QR verification',
-    stepLoad: 'Collection',
-    stepDepart: 'To the weighbridge',
-    nextSection: 'Continue exploring IWMS',
-    scrollHint: 'Scroll to see IWMS in action ↓',
-    skipAnimation: 'Skip animation',
-    notification: 'Vehicle arriving in 15 min — resident notified',
-    verified: 'Pickup verified',
-    ward: 'Ward 12',
-    time: '07:42 AM',
-    weight: '8.4 kg',
-    photo: 'Photo captured',
-    gps: 'GPS locked',
-    households: 'Households covered today',
-    householdsBefore: '{{HERO_HOUSEHOLDS_BEFORE}}',
-    householdsAfter: '{{HERO_HOUSEHOLDS_AFTER}}',
-    illustrative: 'Illustrative pickup — demo data',
-    notify: 'Notify',
-    scan: 'Scan',
-    verify: 'Verify',
-    depart: 'Depart',
-    screenReader:
-      'A collection vehicle arrives, the resident is notified, the worker scans the household QR code, IWMS records weight, photo, time and location, and the vehicle departs to the weighbridge.',
-    mascotToggle: 'Ask the IWMS collection guide for a quick tour',
-    mascotGreeting: 'Hi! 👋',
-    mascotDefault: 'I’m here to help you explore IWMS.',
-    mascotProblem: 'Let’s spot where waste can slip through.',
-    mascotJourney: 'I’ll show how each pickup is checked and tracked.',
-    mascotModules: 'Seven modules help connect the service.',
-    mascotDashboard: 'From field evidence to city oversight.',
-    mascotTechnology: 'The right evidence at every checkpoint.',
-    mascotCitizen: 'Residents can stay part of the journey.',
-    mascotCompliance: 'Clear records help teams review the service.',
-    mascotImpact: 'Better information supports better decisions.',
-    mascotFinance: 'Plan service costs and recovery together.',
-    mascotRoadmap: 'One phase at a time, from rollout to operations.',
-    mascotCTA: 'Let’s make a difference! 🌱',
-    mascotContinue: 'Continue exploring',
   },
-} satisfies SectionContent;
+} as const;
+
+/**
+ * Site header copy (Phase 3.3). Labels only, no claims. `short*` are the visible words kept on
+ * narrow screens; each accessible name still contains the visible label.
+ */
+export const headerContent = {
+  brand: 'IWMS',
+  brandFull: 'Integrated Waste Management Suite',
+  brandBy: 'by Zigma',
+  homeLabel: 'IWMS by Zigma, home',
+  navLabel: 'Platform',
+  skipIntro: 'Skip intro',
+  skipIntroLabel: 'Skip intro: go to the IWMS collection monitor',
+  explore: 'Explore platform',
+  exploreShort: 'Platform',
+  /** Explore platform goes to the IWMS ecosystem section (Scene 04), in every mode. */
+  exploreLabel: 'Explore platform: the IWMS modules',
+  exploreTarget: 'ecosystem',
+  demo: 'Request demo',
+  demoShort: 'Demo',
+  /** Used while the contact email is unconfigured and the action falls back to the website. */
+  demoWebsiteLabel:
+    'Request demo: contact Zigma at www.zigma.in (opens in a new tab)',
+} as const;

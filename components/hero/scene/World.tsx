@@ -1,0 +1,584 @@
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { Environment, Lightformer, useTexture } from '@react-three/drei';
+import {
+  BackSide,
+  CanvasTexture,
+  Color,
+  ConeGeometry,
+  type DirectionalLight,
+  IcosahedronGeometry,
+  InstancedMesh,
+  Matrix4,
+  MeshStandardMaterial,
+  Object3D,
+  type Mesh,
+  RepeatWrapping,
+  SRGBColorSpace,
+  ShaderMaterial,
+  type SpotLight,
+  Vector3,
+} from 'three';
+import type { Quality } from '../quality';
+import type { DayTargets, SceneRefs } from './handles';
+
+export const FOG = { color: '#2a3650', density: 0.019 };
+const ROAD = { length: 640, width: 7, kerb: 0.15, walk: 2.6 };
+const STREETLIGHT = { z: -5.45, spacing: 32, from: -160, to: 224, height: 9 };
+
+/** Deterministic PRNG so the layout is identical on every load. */
+function rng(seed: number) {
+  return () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+}
+
+function useDisposable<T extends { dispose(): void }>(factory: () => T): T {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const value = useMemo(factory, []);
+  useEffect(() => () => value.dispose(), [value]);
+  return value;
+}
+
+/**
+ * Registers `entry` in a SunDirector list while the component is mounted. Filtered by identity
+ * so StrictMode's double mount never leaves a duplicate behind.
+ */
+function useDayEntry<T extends object>(list: T[], entry: T) {
+  useLayoutEffect(() => {
+    if (!list.includes(entry)) list.push(entry);
+    return () => {
+      const i = list.indexOf(entry);
+      if (i >= 0) list.splice(i, 1);
+    };
+  }, [list, entry]);
+}
+
+const skyVertex = /* glsl */ `
+  varying vec3 vDir;
+  void main() {
+    vDir = normalize(position);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+const skyFragment = /* glsl */ `
+  uniform vec3 uZenith;
+  uniform vec3 uMid;
+  uniform vec3 uHorizon;
+  uniform vec3 uGlow;
+  uniform vec3 uGlowDir;
+  // Phase 2.2 sunrise (uSunAmt = 0 in Scene 01: the branch is skipped, output unchanged).
+  uniform vec3 uSunDir;
+  uniform vec3 uSunGlow;
+  uniform float uSunAmt;
+  uniform float uSunWidth;
+  uniform float uSunElev;
+  // Phase 3.4 visible disc (0 until the sun nears the horizon).
+  uniform float uSunDisc;
+  varying vec3 vDir;
+  void main() {
+    vec3 d = normalize(vDir);
+    float h = d.y;
+    vec3 col = mix(uHorizon, uMid, smoothstep(0.0, 0.22, h));
+    col = mix(col, uZenith, smoothstep(0.22, 0.85, h));
+    float toward = max(dot(normalize(vec3(d.x, 0.0, d.z)), uGlowDir), 0.0);
+    col += uGlow * pow(toward, 5.0) * exp(-max(h, 0.0) * 11.0);
+    if (h < 0.0) col = uHorizon;
+    if (uSunAmt > 0.0) {
+      vec3 sunDir = normalize(uSunDir);
+      // Broad horizon wedge toward the sun's azimuth.
+      float sunToward = max(dot(normalize(vec3(d.x, 0.0, d.z)), normalize(vec3(sunDir.x, 0.0, sunDir.z))), 0.0);
+      vec3 sunCol = uSunGlow * uSunAmt * pow(sunToward, uSunWidth)
+        * exp(-max(h, 0.0) * mix(11.0, 6.0, clamp(uSunAmt, 0.0, 1.0)));
+      // Aureole only (no hard disc) so the sun reads without bloom.
+      float ang = acos(clamp(dot(d, sunDir), -1.0, 1.0));
+      sunCol += uSunGlow * uSunAmt * (0.35 * exp(-ang / 0.25)
+        + 0.5 * exp(-ang / 0.04) * smoothstep(radians(-1.0), radians(1.0), uSunElev));
+      col += sunCol * smoothstep(-0.01, 0.03, h);
+      col = min(col, vec3(0.95));
+      if (uSunDisc > 0.0) {
+        // Visible disc: ~0.85° across (≈1.6× the real sun, so it reads at these focal lengths),
+        // soft limb, clipped by the horizon line so it rises through it with the elevation.
+        // Angular distance via atan2(|d×s|, d·s): accurate at the disc's sub-degree scale.
+        float a = atan(length(cross(d, sunDir)), dot(d, sunDir));
+        float r = radians(0.42);
+        float disc = 1.0 - smoothstep(r - radians(0.1), r + radians(0.06), a);
+        float limb = 1.0 - 0.18 * smoothstep(0.0, r, a);
+        float horizonCut = smoothstep(-0.0012, 0.0012, h);
+        // Atmospheric extinction: deep orange while low (≤ 4°), warming to soft white by ~9°.
+        float lift = clamp((uSunElev - radians(4.0)) / radians(5.0), 0.0, 1.0);
+        vec3 discCol = mix(vec3(1.0, 0.5, 0.24), vec3(1.0, 0.9, 0.76), lift) * mix(1.15, 1.6, lift);
+        col = mix(col, discCol * limb, disc * horizonCut * uSunDisc);
+      }
+    }
+    // Blue-noise-ish dither keeps the long gradient free of banding.
+    col += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 255.0;
+    gl_FragColor = vec4(col, 1.0);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }
+`;
+
+function Sky({
+  dome,
+  day,
+}: {
+  dome?: (mesh: Mesh | null) => void;
+  /** Visible dome only: registers its uniforms for the SunDirector. */
+  day?: DayTargets;
+}) {
+  const material = useDisposable(
+    () =>
+      new ShaderMaterial({
+        uniforms: {
+          uZenith: { value: new Color('#080d19') },
+          uMid: { value: new Color('#16203a') },
+          uHorizon: { value: new Color('#33425f') },
+          uGlow: { value: new Color('#3a3346') },
+          uGlowDir: { value: new Vector3(-1, 0, -0.35).normalize() },
+          uSunDir: { value: new Vector3(1, 0, 0) },
+          uSunGlow: { value: new Color('#6a4a52') },
+          uSunAmt: { value: 0 },
+          uSunWidth: { value: 6 },
+          uSunElev: { value: (-6 * Math.PI) / 180 },
+          uSunDisc: { value: 0 },
+        },
+        vertexShader: skyVertex,
+        fragmentShader: skyFragment,
+        side: BackSide,
+        depthWrite: false,
+        fog: false,
+      }),
+  );
+  useLayoutEffect(() => {
+    if (!day) return;
+    day.sky = material.uniforms;
+    return () => {
+      if (day.sky === material.uniforms) day.sky = null;
+    };
+  }, [day, material]);
+  return (
+    <mesh ref={dome} material={material} renderOrder={-1} frustumCulled={false}>
+      <sphereGeometry args={[820, 48, 24]} />
+    </mesh>
+  );
+}
+
+function Road({ quality, sunShadows }: { quality: Quality; sunShadows: boolean }) {
+  const [map, normalMap, roughnessMap] = useTexture([
+    '/textures/asphalt/asphalt025c_color.jpg',
+    '/textures/asphalt/asphalt025c_normalgl.jpg',
+    '/textures/asphalt/asphalt025c_roughness.jpg',
+  ]);
+  useLayoutEffect(() => {
+    const tile = 3.2;
+    for (const texture of [map, normalMap, roughnessMap]) {
+      texture.wrapS = texture.wrapT = RepeatWrapping;
+      texture.repeat.set(ROAD.length / tile, ROAD.width / tile);
+      texture.anisotropy = quality === 'high' ? 8 : 4;
+      texture.needsUpdate = true;
+    }
+    map.colorSpace = SRGBColorSpace;
+  }, [map, normalMap, roughnessMap, quality]);
+
+  const paint = useDisposable(
+    () =>
+      new MeshStandardMaterial({
+        color: '#b9b39c',
+        roughness: 0.6,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+      }),
+  );
+  const dashes = useRef<InstancedMesh>(null);
+  const dashCount = Math.floor(ROAD.length / 9);
+  useLayoutEffect(() => {
+    const m = new Matrix4();
+    for (let i = 0; i < dashCount; i++) {
+      m.makeTranslation(-ROAD.length / 2 + i * 9, 0.004, 0);
+      dashes.current!.setMatrixAt(i, m);
+    }
+    dashes.current!.instanceMatrix.needsUpdate = true;
+  }, [dashCount]);
+
+  const halfW = ROAD.width / 2;
+  return (
+    <group>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[ROAD.length, ROAD.width]} />
+        <meshStandardMaterial
+          map={map}
+          normalMap={normalMap}
+          normalScale={[0.7, 0.7]}
+          roughnessMap={roughnessMap}
+          roughness={0.9}
+          color="#61656c"
+        />
+      </mesh>
+      <instancedMesh ref={dashes} args={[undefined, paint, dashCount]}>
+        <boxGeometry args={[3, 0.002, 0.12]} />
+      </instancedMesh>
+      {[1, -1].map((s) => (
+        <group key={s}>
+          <mesh material={paint} position={[0, 0.004, s * (halfW - 0.25)]}>
+            <boxGeometry args={[ROAD.length, 0.002, 0.15]} />
+          </mesh>
+          {/* Kerb and footpath */}
+          <mesh
+            position={[0, ROAD.kerb / 2, s * (halfW + 0.09)]}
+            receiveShadow={sunShadows}
+          >
+            <boxGeometry args={[ROAD.length, ROAD.kerb, 0.18]} />
+            <meshStandardMaterial color="#5a5d61" roughness={0.9} />
+          </mesh>
+          <mesh
+            position={[0, ROAD.kerb - 0.01, s * (halfW + 0.18 + ROAD.walk / 2)]}
+            receiveShadow={sunShadows}
+          >
+            <boxGeometry args={[ROAD.length, 0.02, ROAD.walk]} />
+            <meshStandardMaterial color="#3b3e43" roughness={0.94} />
+          </mesh>
+        </group>
+      ))}
+      {/* Verge / open ground beyond the road */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]}>
+        <planeGeometry args={[1600, 1600]} />
+        <meshStandardMaterial color="#090c0b" roughness={1} />
+      </mesh>
+    </group>
+  );
+}
+
+function Streetlights({ quality, day }: { quality: Quality; day: DayTargets }) {
+  const xs = useMemo(() => {
+    const list: number[] = [];
+    for (let x = STREETLIGHT.from; x <= STREETLIGHT.to; x += STREETLIGHT.spacing)
+      list.push(x);
+    return list;
+  }, []);
+  const pole = useRef<InstancedMesh>(null);
+  const arm = useRef<InstancedMesh>(null);
+  const head = useRef<InstancedMesh>(null);
+  const metal = useDisposable(
+    () =>
+      new MeshStandardMaterial({ color: '#3a3f45', roughness: 0.55, metalness: 0.6 }),
+  );
+  const lamp = useDisposable(
+    () =>
+      new MeshStandardMaterial({
+        color: '#2b2d30',
+        emissive: '#ffe2c0',
+        emissiveIntensity: 2.4,
+        roughness: 0.4,
+      }),
+  );
+  const lampEntry = useMemo(() => ({ material: lamp, base: 2.4 }), [lamp]);
+  useDayEntry(day.lampHeads, lampEntry);
+  useLayoutEffect(() => {
+    const o = new Object3D();
+    const armLen = 1.9;
+    xs.forEach((x, i) => {
+      o.position.set(x, STREETLIGHT.height / 2, STREETLIGHT.z);
+      o.updateMatrix();
+      pole.current!.setMatrixAt(i, o.matrix);
+      o.position.set(x, STREETLIGHT.height - 0.05, STREETLIGHT.z + armLen / 2);
+      o.updateMatrix();
+      arm.current!.setMatrixAt(i, o.matrix);
+      o.position.set(x, STREETLIGHT.height - 0.16, STREETLIGHT.z + armLen);
+      o.updateMatrix();
+      head.current!.setMatrixAt(i, o.matrix);
+    });
+    for (const mesh of [pole, arm, head])
+      mesh.current!.instanceMatrix.needsUpdate = true;
+  }, [xs]);
+
+  // Only the posts nearest the action carry real lights; the rest are emissive heads.
+  const litPosts = quality === 'high' ? [-32, 32] : [32];
+  return (
+    <group>
+      <instancedMesh ref={pole} args={[undefined, metal, xs.length]}>
+        <cylinderGeometry args={[0.07, 0.11, STREETLIGHT.height, 10]} />
+      </instancedMesh>
+      <instancedMesh ref={arm} args={[undefined, metal, xs.length]}>
+        <boxGeometry args={[0.07, 0.07, 1.9]} />
+      </instancedMesh>
+      <instancedMesh ref={head} args={[undefined, lamp, xs.length]}>
+        <boxGeometry args={[0.32, 0.1, 0.68]} />
+      </instancedMesh>
+      {litPosts.map((x) => (
+        <StreetLamp key={x} x={x} day={day} />
+      ))}
+    </group>
+  );
+}
+
+function StreetLamp({ x, day }: { x: number; day: DayTargets }) {
+  const target = useMemo(() => new Object3D(), []);
+  const light = useRef<SpotLight>(null);
+  useLayoutEffect(() => {
+    const spot = light.current!;
+    spot.target = target;
+    const list = day.streetSpots;
+    if (!list.some((e) => e.light === spot)) list.push({ light: spot, base: 240 });
+    return () => {
+      const i = list.findIndex((e) => e.light === spot);
+      if (i >= 0) list.splice(i, 1);
+    };
+  }, [day, target]);
+  return (
+    <>
+      <primitive object={target} position={[x, 0, -0.8]} />
+      <spotLight
+        ref={light}
+        position={[x, STREETLIGHT.height - 0.3, STREETLIGHT.z + 1.9]}
+        color="#ffe2c0"
+        intensity={240}
+        angle={0.95}
+        penumbra={0.9}
+        distance={28}
+        decay={2}
+      />
+    </>
+  );
+}
+
+/** Instanced tree lines (conifers + broadleaf canopies) that read as silhouettes through fog. */
+function Treeline() {
+  const conifers = useRef<InstancedMesh>(null);
+  const canopies = useRef<InstancedMesh>(null);
+  const coneGeo = useDisposable(() => new ConeGeometry(1, 1, 16, 3).translate(0, 0.5, 0));
+  const blobGeo = useDisposable(() => new IcosahedronGeometry(1, 4));
+  const foliage = useDisposable(
+    () => new MeshStandardMaterial({ color: '#0a0f0d', roughness: 1 }),
+  );
+  const layout = useMemo(() => {
+    const random = rng(7);
+    const cones: Matrix4[] = [];
+    const blobs: Matrix4[] = [];
+    const o = new Object3D();
+    const bands: [number, number][] = [
+      [-60, -20],
+      [40, 72],
+    ];
+    for (const [zMin, zMax] of bands) {
+      // Stops short of Scene 02's city (x > 240), which has its own trees.
+      for (let x = -280; x < 240; x += 3 + random() * 4) {
+        const z = zMin + random() * (zMax - zMin);
+        if (random() < 0.6) {
+          const h = 8 + random() * 8;
+          o.position.set(x, 0, z);
+          o.scale.set(1.4 + random() * 1.2, h, 1.4 + random() * 1.2);
+          o.rotation.set(0, random() * Math.PI, 0);
+          o.updateMatrix();
+          cones.push(o.matrix.clone());
+        } else {
+          const r = 2.4 + random() * 2.2;
+          o.position.set(x, r * 0.9 + 2.5 + random() * 2, z);
+          o.scale.set(r * (1 + random() * 0.4), r * (0.8 + random() * 0.3), r);
+          o.rotation.set(random(), random() * Math.PI, random());
+          o.updateMatrix();
+          blobs.push(o.matrix.clone());
+        }
+      }
+    }
+    return { cones, blobs };
+  }, []);
+  useLayoutEffect(() => {
+    layout.cones.forEach((m, i) => conifers.current!.setMatrixAt(i, m));
+    layout.blobs.forEach((m, i) => canopies.current!.setMatrixAt(i, m));
+    conifers.current!.instanceMatrix.needsUpdate = true;
+    canopies.current!.instanceMatrix.needsUpdate = true;
+  }, [layout]);
+  return (
+    <>
+      <instancedMesh
+        ref={conifers}
+        args={[coneGeo, foliage, layout.cones.length]}
+        frustumCulled={false}
+      />
+      <instancedMesh
+        ref={canopies}
+        args={[blobGeo, foliage, layout.blobs.length]}
+        frustumCulled={false}
+      />
+    </>
+  );
+}
+
+/** Low warehouse / housing blocks with a scatter of warm early-riser windows. */
+function Buildings({ day }: { day: DayTargets }) {
+  const windows = useDisposable(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, 128, 128);
+    const random = rng(11);
+    for (let y = 0; y < 8; y++)
+      for (let x = 0; x < 10; x++)
+        if (random() < 0.07) {
+          ctx.fillStyle = random() < 0.7 ? '#ffb36b' : '#cfe0ff';
+          ctx.fillRect(x * 12.8 + 3, y * 16 + 5, 6, 7);
+        }
+    return new CanvasTexture(canvas);
+  });
+  const material = useDisposable(
+    () =>
+      new MeshStandardMaterial({
+        color: '#121722',
+        roughness: 0.9,
+        emissive: '#ffffff',
+        emissiveMap: windows,
+        emissiveIntensity: 0.55,
+      }),
+  );
+  const windowEntry = useMemo(() => ({ material, base: 0.55 }), [material]);
+  useDayEntry(day.windows, windowEntry);
+  const mesh = useRef<InstancedMesh>(null);
+  const blocks = useMemo(() => {
+    const random = rng(3);
+    const list: Matrix4[] = [];
+    const o = new Object3D();
+    for (const [zMin, zMax, count] of [
+      [-95, -62, 20],
+      [72, 115, 14],
+    ]) {
+      for (let i = 0; i < count; i++) {
+        const w = 12 + random() * 20;
+        const h = 7 + random() * 17;
+        o.position.set(-250 + random() * 450, h / 2, zMin + random() * (zMax - zMin));
+        o.scale.set(w, h, 10 + random() * 12);
+        o.rotation.set(0, (random() - 0.5) * 0.3, 0);
+        o.updateMatrix();
+        list.push(o.matrix.clone());
+      }
+    }
+    return list;
+  }, []);
+  useLayoutEffect(() => {
+    blocks.forEach((m, i) => mesh.current!.setMatrixAt(i, m));
+    mesh.current!.instanceMatrix.needsUpdate = true;
+  }, [blocks]);
+  return (
+    <instancedMesh
+      ref={mesh}
+      args={[undefined, material, blocks.length]}
+      frustumCulled={false}
+    >
+      <boxGeometry args={[1, 1, 1]} />
+    </instancedMesh>
+  );
+}
+
+/**
+ * Phase 2.2 sun. Mounted from the first frame at intensity 0 (no shader recompile when it rises);
+ * the SunDirector moves its position/target and drives colour, intensity and shadow updates.
+ */
+function SunLight({ day, castShadow }: { day: DayTargets; castShadow: boolean }) {
+  const target = useMemo(() => new Object3D(), []);
+  const light = useRef<DirectionalLight>(null);
+  useLayoutEffect(() => {
+    const sun = light.current!;
+    sun.target = target;
+    if (castShadow) {
+      const { shadow } = sun;
+      shadow.mapSize.set(2048, 2048);
+      const cam = shadow.camera;
+      cam.left = cam.bottom = -40;
+      cam.right = cam.top = 40;
+      cam.near = 1;
+      cam.far = 320;
+      cam.updateProjectionMatrix();
+      shadow.bias = -0.0004;
+      shadow.normalBias = 0.03;
+      // The SunDirector enables updates once the sun matters.
+      shadow.autoUpdate = false;
+    }
+    day.sunLight = sun;
+    return () => {
+      if (day.sunLight === sun) day.sunLight = null;
+    };
+  }, [day, target, castShadow]);
+  return (
+    <>
+      <primitive object={target} position={[0, 0, 0]} />
+      <directionalLight
+        ref={light}
+        position={[145, 18, 31]}
+        color="#ffa654"
+        intensity={0}
+        castShadow={castShadow}
+      />
+    </>
+  );
+}
+
+export function World({
+  quality,
+  refs,
+  sunShadows = false,
+}: {
+  quality: Quality;
+  refs: SceneRefs;
+  /** Sun casts shadows; constant for the session. */
+  sunShadows?: boolean;
+}) {
+  return (
+    <>
+      <fogExp2 attach="fog" args={[FOG.color, FOG.density]} />
+      {/* Reflections come from the scene's own blue-hour sky plus soft streetlight panels: no sun hotspot. */}
+      <Environment resolution={256} frames={1} environmentIntensity={1.3}>
+        <Sky />
+        <Lightformer form="rect" color="#ffe2c0" intensity={1.4} scale={[6, 1, 1]} position={[0, 9, -6]} rotation={[Math.PI / 2, 0, 0]} />
+        <Lightformer form="rect" color="#ffe2c0" intensity={0.8} scale={[6, 1, 1]} position={[32, 9, -6]} rotation={[Math.PI / 2, 0, 0]} />
+        <Lightformer form="ring" color="#8fb0ff" intensity={0.6} scale={30} position={[-60, 8, -40]} target={[0, 0, 0]} />
+      </Environment>
+      <hemisphereLight
+        ref={(light) => {
+          refs.sky = light;
+        }}
+        args={['#4a5f86', '#14161a', 0.5]}
+      />
+      {/* Pre-dawn sky key, cool and from behind the truck */}
+      <directionalLight
+        ref={(light) => {
+          refs.day.keyLight = light;
+        }}
+        position={[-40, 30, -25]}
+        color="#c9d6ff"
+        intensity={0.3}
+      />
+      {/* Rim: traces the roofline so the truck reads as a silhouette with lamps off */}
+      <directionalLight
+        ref={(light) => {
+          refs.day.rimLight = light;
+        }}
+        position={[-26, 7, -16]}
+        color="#8fb0ff"
+        intensity={0.65}
+      />
+      {/* Sunrise key: dark (intensity 0) through Scene 01, driven by the SunDirector */}
+      <SunLight day={refs.day} castShadow={sunShadows} />
+      {/* Front-side sky fill, driven by rig.dawn */}
+      <directionalLight
+        ref={(light) => {
+          refs.fill = light;
+        }}
+        position={[30, 22, 40]}
+        color="#9fb3d9"
+        intensity={0}
+      />
+      <Sky
+        dome={(mesh) => {
+          refs.skyDome = mesh;
+        }}
+        day={refs.day}
+      />
+      <Road quality={quality} sunShadows={sunShadows} />
+      <Streetlights quality={quality} day={refs.day} />
+      <Treeline />
+      <Buildings day={refs.day} />
+    </>
+  );
+}

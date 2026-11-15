@@ -1,0 +1,430 @@
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Canvas, useFrame, useThree, type RootState } from '@react-three/fiber';
+import {
+  HalfFloatType,
+  UnsignedByteType,
+  Vector3,
+  WebGLRenderTarget,
+  type Group,
+  type Object3D,
+} from 'three';
+import { useProgress } from '@react-three/drei';
+import { ACESFilmicToneMapping } from 'three';
+import 'lenis/dist/lenis.css';
+import { CityLightPool } from './scene/CityLightPool';
+import { WasteBins } from './scene/WasteBins';
+import {
+  CollectionDirector,
+  CollectionHudView,
+  createCollectionHud,
+  type CollectionHud,
+} from './scene/CollectionOverlay';
+import { Director } from './scene/Director';
+import { SunDirector } from './scene/SunDirector';
+import { sunAt } from './scene/sun';
+import {
+  COLLECT_END_SEC,
+  COLLECTION_GATE,
+  RESIDENTIAL,
+  SCENE2_END_SEC,
+  STOP_DISTANCE,
+  STOP_SEC,
+  WHEELBASE,
+  driveAt,
+  samplePath,
+  type DriveState,
+  type PathSample,
+} from './scene/route';
+import { createSceneRefs, type SceneRefs } from './scene/handles';
+import { STILL_SHOT, createRig, focalToFov, SHOTS } from './scene/rig';
+import { applyStill, startExperience } from './scene/timeline';
+import { Truck } from './scene/Truck';
+import { World } from './scene/World';
+import type { Quality } from './quality';
+import type { HeroBridge } from '@/components/site/bridge';
+
+// Post-processing ships in its own chunk; only the high tier downloads it.
+const Effects = lazy(() =>
+  import('./scene/Effects').then((m) => ({ default: m.Effects })),
+);
+
+// Scene 02's city is its own chunk, fetched once Scene 01 is on screen.
+const City = lazy(() => import('./scene/city/City'));
+
+/**
+ * Mounts the city, then compiles its programs off the critical path (KHR_parallel_shader_compile
+ * where available) before it is ever drawn, so entering the city never hitches mid-scroll.
+ */
+function CityMount({ quality, refs }: Pick<StageProps, 'quality'> & { refs: SceneRefs }) {
+  const group = useRef<Group>(null);
+  // Hidden until compiled; set imperatively so a re-render can never hide it again.
+  useLayoutEffect(() => {
+    if (group.current) group.current.visible = false;
+  }, []);
+  return (
+    <group ref={group}>
+      <Suspense fallback={null}>
+        <City quality={quality} refs={refs} />
+        {/* Phase 3.2 QR-tagged household bins: part of the city group, so they compile with it. */}
+        <WasteBins />
+        <AfterMount
+          run={async (gl, camera, scene) => {
+            const root = group.current;
+            if (!root) return;
+            root.visible = true;
+            const compiled = gl.compileAsync(root, camera, scene);
+            root.visible = false;
+            await compiled;
+            // Warm-up: draw every city mesh once, unculled, into a tiny target. Geometry and
+            // texture uploads (and ANGLE's draw-time shader variants on Windows) happen now,
+            // while the canvas is still fading in, instead of as a stall on first sight.
+            // ANGLE builds per-output-format shader variants, so match the format the frame
+            // is really drawn into: half-float under post-processing (high), 8-bit otherwise.
+            const target = new WebGLRenderTarget(64, 64, {
+              type: quality === 'high' ? HalfFloatType : UnsignedByteType,
+            });
+            const unculled: Object3D[] = [];
+            root.traverse((o) => {
+              if (o.frustumCulled) {
+                o.frustumCulled = false;
+                unculled.push(o);
+              }
+            });
+            root.visible = true;
+            const sunLight = refs.day.sunLight;
+            if (sunLight?.castShadow) sunLight.shadow.needsUpdate = true;
+            const previous = gl.getRenderTarget();
+            gl.setRenderTarget(target);
+            gl.render(scene, camera);
+            gl.setRenderTarget(previous);
+            unculled.forEach((o) => (o.frustumCulled = true));
+            target.dispose();
+          }}
+        />
+      </Suspense>
+    </group>
+  );
+}
+
+function AfterMount({
+  run,
+}: {
+  run: (
+    gl: RootState['gl'],
+    camera: RootState['camera'],
+    scene: RootState['scene'],
+  ) => Promise<void>;
+}) {
+  const get = useThree((s) => s.get);
+  const done = useRef(false);
+  useEffect(() => {
+    if (done.current) return;
+    done.current = true;
+    const { gl, camera, scene } = get();
+    void run(gl, camera, scene);
+  }, [get, run]);
+  return null;
+}
+
+/** `?debug` exposes read-only hooks for QA (Playwright) and manual profiling. */
+function DebugHook({
+  rig,
+  refs,
+  hud,
+}: {
+  rig: ReturnType<typeof createRig>;
+  refs: SceneRefs;
+  hud: CollectionHud;
+}) {
+  const gl = useThree((s) => s.gl);
+  const camera = useThree((s) => s.camera);
+  const getState = useThree((s) => s.get);
+  const debug = useRef(false);
+  const frame = useRef({ calls: 0, triangles: 0 });
+  /** Frames the loop has run (QA: proves the off-screen pause renders nothing). */
+  const frames = useRef(0);
+  // Post-processing renders several passes per frame, so accumulate info across the frame.
+  useFrame(() => {
+    if (!debug.current) return;
+    frames.current++;
+    frame.current = { calls: gl.info.render.calls, triangles: gl.info.render.triangles };
+    gl.info.reset();
+  }, -1);
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has('debug')) return;
+    debug.current = true;
+    gl.info.autoReset = false;
+    const scratch = {} as DriveState;
+    const rear = {} as PathSample;
+    // Front-axle pose from the pure route maths (what the Director applies), yaw from +X toward +Z.
+    const truck = () => {
+      const d = driveAt(rig.driveSec, scratch).distance;
+      samplePath(d - WHEELBASE, rear);
+      return {
+        x: rear.x + Math.cos(rear.yaw) * WHEELBASE,
+        z: rear.z + Math.sin(rear.yaw) * WHEELBASE,
+        yaw: rear.yaw,
+        distance: d,
+      };
+    };
+    const target = window as unknown as Record<string, unknown>;
+    target.__iwmsHero = {
+      rig,
+      distance: () => driveAt(rig.driveSec, scratch).distance,
+      camera: () => camera.position.toArray(),
+      truck,
+      /** Rendered truck root (world), to cross-check the scene graph against the route. */
+      truckWorld: () => {
+        const drive = refs.drive;
+        if (!drive) return null;
+        const p = drive.getWorldPosition(drive.position.clone());
+        return { x: p.x, z: p.z, yaw: -drive.rotation.y };
+      },
+      geometry: () => ({ residentialAxisX: RESIDENTIAL.axisX }),
+      /** Phase 2.2: sunrise state as applied this frame (progress is a pure function of distance). */
+      sun: () => {
+        const d = driveAt(rig.driveSec, scratch).distance;
+        const sky = refs.day.sky;
+        return {
+          distance: d,
+          expected: sunAt(d),
+          progress: refs.day.progress,
+          sunLight: refs.day.sunLight?.intensity ?? 0,
+          hemisphere: refs.sky?.intensity ?? 0,
+          zenith: sky ? (sky.uZenith.value as { getHexString(): string }).getHexString() : null,
+          lampHeads: refs.day.lampHeads.map((l) => l.material.emissiveIntensity),
+        };
+      },
+      /** Phase 3.1: collection stop, digital-layer progress, and overlay anchors vs projection. */
+      collection: () => {
+        const wheel = refs.truck?.wheels[0];
+        const size = gl.domElement.getBoundingClientRect();
+        camera.updateMatrixWorld();
+        const v = new Vector3();
+        return {
+          collectU: rig.collectU,
+          pin: rig.pin,
+          gps: rig.gps,
+          route: rig.route,
+          net: rig.net,
+          scan: rig.scan,
+          done: rig.done,
+          stopDistance: STOP_DISTANCE,
+          stopSec: STOP_SEC,
+          collectEndSec: COLLECT_END_SEC,
+          scene2EndSec: SCENE2_END_SEC,
+          gate: { x: COLLECTION_GATE.x, z: COLLECTION_GATE.z },
+          wheel: wheel ? { spin: wheel.node.rotation.z, radius: wheel.radius } : null,
+          anchors: hud.anchors().map(({ id, world }) => {
+            v.set(...world).applyMatrix4(camera.matrixWorldInverse);
+            const visible = v.z < -camera.near;
+            v.applyMatrix4(camera.projectionMatrix);
+            return {
+              id,
+              expected: {
+                x: (v.x * 0.5 + 0.5) * size.width,
+                y: (-v.y * 0.5 + 0.5) * size.height,
+                visible,
+              },
+              rendered: hud.rendered[id] ?? { x: NaN, y: NaN, opacity: 0 },
+            };
+          }),
+        };
+      },
+      /** Render-loop state: frames run so far and the current R3F frameloop mode. */
+      loop: () => ({ frames: frames.current, frameloop: getState().frameloop }),
+      info: () => ({
+        calls: frame.current.calls,
+        triangles: frame.current.triangles,
+        geometries: gl.info.memory.geometries,
+        textures: gl.info.memory.textures,
+        programs: gl.info.programs?.length ?? 0,
+      }),
+    };
+    return () => {
+      debug.current = false;
+      gl.info.autoReset = true;
+      delete target.__iwmsHero;
+    };
+  }, [rig, refs, hud, gl, camera, getState]);
+  return null;
+}
+
+/**
+ * Stops the render loop while the hero section is entirely off-screen and restarts it as soon as
+ * any part of it re-enters the viewport. No early margin: the hero's last frame is its static end
+ * hold, so the frame shown at the edge on return is already correct — and Scene 04 never renders
+ * while the hero is still running (measured at the M3 gate: a 50% margin kept the hero rendering
+ * ~60 fps through the first half-viewport of Scene 04).
+ * Nothing is torn down: the WebGL context, geometry, textures, compiled programs and the GSAP
+ * timeline all stay alive, and scroll keeps driving the rig while paused, so returning shows
+ * exactly the state for the current scroll position. Mounted only after the scene is ready.
+ */
+function OffscreenPause({ section }: { section: HTMLElement }) {
+  const setFrameloop = useThree((s) => s.setFrameloop);
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => setFrameloop(entry.isIntersecting ? 'always' : 'never'),
+      // −1px at the top: edge contact counts as intersecting, so with a 0 margin a hero whose
+      // bottom sits exactly at the viewport top (e.g. landing on Scene 04 via Explore platform)
+      // kept rendering while fully invisible. It resumes as soon as 1px of it is visible.
+      { rootMargin: '-1px 0px 0px 0px' },
+    );
+    observer.observe(section);
+    return () => {
+      observer.disconnect();
+      setFrameloop('always');
+    };
+  }, [section, setFrameloop]);
+  return null;
+}
+
+export interface StageProps {
+  quality: Exclude<Quality, 'poster'>;
+  still: boolean;
+  section: HTMLElement;
+  onReady: () => void;
+  onFail: () => void;
+  /** Receives the header navigation bridge once the scroll experience is live (null on teardown). */
+  onBridge?: (bridge: HeroBridge | null) => void;
+}
+
+/** Fires once the scene has mounted and two frames have been presented (shaders compiled). */
+function ReadySignal({ onReady }: { onReady: () => void }) {
+  const invalidate = useThree((s) => s.invalidate);
+  const callback = useRef(onReady);
+  const fired = useRef(false);
+  useEffect(() => {
+    callback.current = onReady;
+  });
+  useEffect(() => {
+    let frame = requestAnimationFrame(() => {
+      invalidate();
+      frame = requestAnimationFrame(() => {
+        invalidate();
+        if (fired.current) return;
+        fired.current = true;
+        callback.current();
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [invalidate]);
+  return null;
+}
+
+function LoadingLine() {
+  const { progress, active } = useProgress();
+  return (
+    <div className="hero__loader" data-active={active} aria-hidden="true">
+      <span style={{ transform: `scaleX(${progress / 100})` }} />
+    </div>
+  );
+}
+
+export default function Stage({
+  quality,
+  still,
+  section,
+  onReady,
+  onFail,
+  onBridge,
+}: StageProps) {
+  // Real-time sun shadows only where the GPU budget allows (decided from Phase 2.2 measurements).
+  const sunShadows = quality === 'high' && !still;
+  const [rig] = useState(() => {
+    const initial = createRig();
+    if (still) applyStill(initial, STILL_SHOT);
+    return initial;
+  });
+  const [refs] = useState(createSceneRefs);
+  const [hud] = useState(createCollectionHud);
+  // QA-only deterministic camera (see Director `steady`); requires `?debug` as well.
+  const [steady] = useState(() => {
+    const q = new URLSearchParams(window.location.search);
+    return q.has('debug') && q.has('testcam');
+  });
+  // Internal labelling (proxy vehicle badge): dev server or `?debug` only, never the presentation.
+  const [internal] = useState(
+    () => import.meta.env.DEV || new URLSearchParams(window.location.search).has('debug'),
+  );
+  const [ready, setReady] = useState(false);
+  const bridgeCallback = useRef(onBridge);
+  useEffect(() => {
+    bridgeCallback.current = onBridge;
+  });
+
+  useEffect(() => {
+    if (!ready || still) return;
+    const copy = {
+      // The positioning line rides with the title words: it joins the intro stagger after the
+      // last word (the title keeps its 6.2 s cue) and clears/returns/clears with the title.
+      words: [...section.querySelectorAll<HTMLElement>('.hero__word, .hero__positioning')],
+      subtitle: section.querySelector<HTMLElement>('.hero__subtitle')!,
+      city: [...section.querySelectorAll<HTMLElement>('.hero__city-line')],
+    };
+    window.history.scrollRestoration = 'manual';
+    window.scrollTo(0, 0);
+    const experience = startExperience(rig, section, copy);
+    // The bridge exists only once the ScrollTrigger does (after the reset to the top above), so a
+    // header action can never be lost or undone by that reset: the actions appear when it is live.
+    bridgeCallback.current?.({
+      goTo: (label, { immediate = true } = {}) => experience.goTo(label, immediate),
+      scrollTo: (y) => experience.scrollTo(y),
+    });
+    return () => {
+      bridgeCallback.current?.(null);
+      experience.dispose();
+    };
+  }, [ready, still, rig, section]);
+
+  return (
+    <>
+      <Canvas
+        className="hero__canvas"
+        dpr={quality === 'high' ? [1, 1.75] : [1, 1.25]}
+        frameloop={still ? 'demand' : 'always'}
+        shadows={sunShadows ? 'percentage' : false}
+        gl={{
+          antialias: quality !== 'high',
+          powerPreference: 'high-performance',
+          stencil: false,
+          toneMapping: ACESFilmicToneMapping,
+        }}
+        camera={{ fov: focalToFov(SHOTS[0].focal), near: 0.25, far: 1600 }}
+        onCreated={({ gl }) => {
+          gl.domElement.addEventListener('webglcontextlost', (event) => {
+            event.preventDefault();
+            onFail();
+          });
+        }}
+      >
+        <Suspense fallback={null}>
+          <World quality={quality} refs={refs} sunShadows={sunShadows} />
+          <Truck refs={refs} />
+          <Director rig={rig} refs={refs} still={still} steady={steady} />
+          <SunDirector rig={rig} refs={refs} still={still} sunShadows={sunShadows} />
+          {!still && <CityLightPool refs={refs} count={quality === 'high' ? 3 : 2} />}
+          {!still && <CollectionDirector rig={rig} hud={hud} />}
+          <DebugHook rig={rig} refs={refs} hud={hud} />
+          {ready && !still && <OffscreenPause section={section} />}
+          {quality === 'high' && <Effects />}
+          <ReadySignal
+            onReady={() => {
+              setReady(true);
+              onReady();
+            }}
+          />
+        </Suspense>
+        {ready && !still && <CityMount quality={quality} refs={refs} />}
+      </Canvas>
+      {!still && <CollectionHudView hud={hud} />}
+      <LoadingLine />
+      {/* Asset status stays documented (docs/TRUCK_ASSET_SPEC.md); the badge is internal-only. */}
+      {!__TRUCK_MODEL__ && internal && (
+        <p className="hero__proxy-note">
+          Development proxy vehicle — final licensed truck model pending
+        </p>
+      )}
+    </>
+  );
+}
